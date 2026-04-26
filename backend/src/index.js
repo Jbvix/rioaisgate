@@ -11,8 +11,12 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || '*',
-  methods: ['GET', 'POST', 'OPTIONS'],
+  origin: (origin, cb) => {
+    // Allow requests with no origin (health checks, curl) and all browser origins.
+    // AIS vessel data is public — no credential-bearing requests are made.
+    cb(null, true);
+  },
+  methods: ['GET', 'OPTIONS'],
 }));
 app.use(express.json());
 app.use('/api', api);
