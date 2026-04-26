@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "description": "Monitor de tráfego de embarcações — Barra da Guanabara",
   "scripts": {
-    "postinstall": "npm --prefix backend install --omit=dev",
-    "start": "node backend/src/index.js",
-    "migrate": "node backend/src/db/migrate.js"
+    "build": "cd backend && npm install --omit=dev",
+    "start": "cd backend && node src/index.js",
+    "migrate": "cd backend && node src/db/migrate.js"
   },
   "engines": {
     "node": ">=18.0.0"
