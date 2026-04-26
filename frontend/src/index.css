@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* Leaflet icon fix for Vite */
+.leaflet-default-icon-path {
+  background-image: url("https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png");
+}
+
+/* Custom vessel marker */
+.vessel-marker {
+  background: transparent;
+  border: none;
+}
+
+.vessel-arrow {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));
+  transition: transform 0.3s ease;
+}
+
+/* Scrollbar for dark panels */
+.dark-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+.dark-scroll::-webkit-scrollbar-track {
+  background: #0f2040;
+}
+.dark-scroll::-webkit-scrollbar-thumb {
+  background: #1d3a6e;
+  border-radius: 2px;
+}
