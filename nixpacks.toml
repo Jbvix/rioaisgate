@@ -2,7 +2,7 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install", "npm --prefix backend install --omit=dev"]
+cmds = ["cd backend && npm install --omit=dev"]
 
 [start]
-cmd = "node backend/src/index.js"
+cmd = "cd backend && node src/index.js"
