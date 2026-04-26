@@ -22,14 +22,14 @@ const server = http.createServer(app);
 
 // ── WebSocket server ──────────────────────────────────────────────
 
-// Adiciona headers CORS na resposta de upgrade do WebSocket
+// Recusa conexões WebSocket de origens não permitidas
 server.on('upgrade', (request, socket, head) => {
   const origin = request.headers['origin'];
-  if (origin === FRONTEND_ORIGIN) {
-    socket.write('HTTP/1.1 101 Web Socket Protocol Handshake\r\n' +
-      'Access-Control-Allow-Origin: ' + FRONTEND_ORIGIN + '\r\n' +
-      '\r\n');
+  if (origin && origin !== FRONTEND_ORIGIN) {
+    socket.destroy();
+    return;
   }
+  // Permite o ws.Server cuidar do restante
 });
 
 const wss = new WebSocket.Server({ server, path: '/ws' });
