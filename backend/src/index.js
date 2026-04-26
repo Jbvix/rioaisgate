@@ -10,11 +10,43 @@ const { setBroadcast } = require('./vesselTracker');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-const FRONTEND_ORIGIN = 'https://loquacious-kelpie-f684a4.netlify.app';
-app.use(cors({
-  origin: FRONTEND_ORIGIN,
+const FALLBACK_ORIGINS = [
+  'https://loquacious-kelpie-f684a4.netlify.app',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+];
+
+function normalizeOrigin(origin) {
+  return String(origin || '').trim().replace(/\/$/, '').toLowerCase();
+}
+
+const allowedOrigins = new Set(
+  (process.env.FRONTEND_URL || '')
+    .split(',')
+    .map((origin) => normalizeOrigin(origin))
+    .filter(Boolean)
+);
+
+if (allowedOrigins.size === 0) {
+  FALLBACK_ORIGINS.forEach((origin) => allowedOrigins.add(normalizeOrigin(origin)));
+}
+
+function isAllowedOrigin(origin) {
+  // Requests without Origin are usually server-to-server and should pass.
+  if (!origin) return true;
+  return allowedOrigins.has(normalizeOrigin(origin));
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) return callback(null, true);
+    return callback(new Error(`Origin not allowed by CORS: ${origin}`));
+  },
   methods: ['GET', 'OPTIONS'],
-}));
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use('/api', api);
 
@@ -25,7 +57,8 @@ const server = http.createServer(app);
 // Recusa conexões WebSocket de origens não permitidas
 server.on('upgrade', (request, socket, head) => {
   const origin = request.headers['origin'];
-  if (origin && origin !== FRONTEND_ORIGIN) {
+  if (!isAllowedOrigin(origin)) {
+    console.warn(`[WS] Rejected upgrade from origin: ${origin}`);
     socket.destroy();
     return;
   }

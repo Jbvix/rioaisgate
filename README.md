@@ -64,7 +64,7 @@ npm run dev
 PORT=3001
 DATABASE_URL=postgresql://user:pass@host:5432/rioaisgate
 AISSTREAM_API_KEY=sua_chave_aisstream
-FRONTEND_URL=https://seu-app.netlify.app
+FRONTEND_URL=https://seu-app.netlify.app,http://localhost:5173
 ```
 
 ### Frontend (`.env`)
