@@ -56,7 +56,7 @@ $$ LANGUAGE sql;
     await pool.query(sql);
     console.log('Migration completed successfully.');
   } catch (err) {
-    console.error('Migration failed:', err.message);
+    console.error('Migration failed:', err);
     process.exit(1);
   } finally {
     await pool.end();
