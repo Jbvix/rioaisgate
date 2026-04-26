@@ -11,4 +11,4 @@ COPY backend/ ./
 
 EXPOSE 3001
 
-CMD ["node", "src/index.js"]
+CMD ["sh", "-c", "node src/db/migrate.js && node src/index.js"]

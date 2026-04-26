@@ -7,7 +7,42 @@ const pool = new Pool({
     : false,
 });
 
-pool.on('error', (err) => console.error('DB pool error:', err.message));
+function formatDbError(err) {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+  return [
+    err.message,
+    err.code ? `code=${err.code}` : null,
+    err.severity ? `severity=${err.severity}` : null,
+    err.table ? `table=${err.table}` : null,
+    err.constraint ? `constraint=${err.constraint}` : null,
+    err.detail ? `detail=${err.detail}` : null,
+  ].filter(Boolean).join(' | ');
+}
+
+pool.on('error', (err) => console.error('DB pool error:', formatDbError(err)));
+
+async function logSchemaStatus() {
+  try {
+    const res = await pool.query(`
+      SELECT
+        to_regclass('public.vessels') AS vessels,
+        to_regclass('public.vessel_events') AS vessel_events,
+        to_regclass('public.vessel_positions') AS vessel_positions
+    `);
+    const row = res.rows[0] || {};
+    const missing = ['vessels', 'vessel_events', 'vessel_positions'].filter((k) => !row[k]);
+    if (missing.length > 0) {
+      console.error(`[DB] Missing tables: ${missing.join(', ')}. Run migrations.`);
+    } else {
+      console.log('[DB] Schema check OK.');
+    }
+  } catch (err) {
+    console.error('[DB] Schema check failed:', formatDbError(err));
+  }
+}
+
+logSchemaStatus();
 
 const db = {
   query: (text, params) => pool.query(text, params),

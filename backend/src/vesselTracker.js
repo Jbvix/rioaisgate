@@ -11,6 +11,17 @@ function setBroadcast(fn) {
   broadcastFn = fn;
 }
 
+function formatError(err) {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+  if (err.stack) return err.stack;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return String(err);
+  }
+}
+
 function broadcast(msg) {
   if (broadcastFn) broadcastFn(msg);
 }
@@ -43,7 +54,7 @@ async function updateStaticData(mmsi, data) {
   try {
     await db.upsertVessel({ mmsi, ...data });
   } catch (err) {
-    console.error(`[DB] upsertVessel ${mmsi}:`, err.message);
+    console.error(`[DB] upsertVessel ${mmsi}: ${formatError(err)}`);
   }
 }
 
@@ -70,7 +81,8 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
   try {
     await db.savePosition({ mmsi, lat, lon, speed, heading, course, nav_status });
   } catch (err) {
-    // non-critical
+    // non-critical, but useful for diagnosing DB connectivity/schema drift in prod
+    console.error(`[DB] savePosition ${mmsi}: ${formatError(err)}`);
   }
 
   // Detect crossing
@@ -96,7 +108,7 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
       broadcast(payload);
       console.log(`[EVENT] ${event_type} | MMSI:${mmsi} | ${updated.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`);
     } catch (err) {
-      console.error(`[DB] recordEvent ${mmsi}:`, err.message);
+      console.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
     }
   }
 
