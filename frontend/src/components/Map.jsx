@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap } from 'react-leaflet';
+import React, { useEffect } from 'react';
+import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { GUANABARA_BAY_POLYGON } from '../constants/geofence';
 
@@ -67,7 +67,53 @@ function FlyToVessel({ selectedMmsi, vessels }) {
   return null;
 }
 
-export default function Map({ vessels, selectedMmsi, onSelectVessel }) {
+const geofencePointIcon = L.divIcon({
+  html: '<div style="width:10px;height:10px;border-radius:9999px;background:#f43f5e;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.25)"></div>',
+  className: '',
+  iconSize: [10, 10],
+  iconAnchor: [5, 5],
+});
+
+function GeofenceEditLayer({ enabled, polygon, onChange }) {
+  useMapEvents({
+    click(e) {
+      if (!enabled) return;
+      onChange([...polygon, [e.latlng.lat, e.latlng.lng]]);
+    },
+  });
+
+  if (!enabled) return null;
+
+  return polygon.map((point, index) => (
+    <Marker
+      key={`gf-${index}`}
+      position={point}
+      draggable
+      icon={geofencePointIcon}
+      eventHandlers={{
+        dragend: (e) => {
+          const { lat, lng } = e.target.getLatLng();
+          const next = [...polygon];
+          next[index] = [lat, lng];
+          onChange(next);
+        },
+        dblclick: () => {
+          if (polygon.length <= 3) return;
+          onChange(polygon.filter((_, i) => i !== index));
+        },
+      }}
+    />
+  ));
+}
+
+export default function Map({
+  vessels,
+  selectedMmsi,
+  onSelectVessel,
+  geofencePolygon = GUANABARA_BAY_POLYGON,
+  isEditingGeofence = false,
+  onGeofenceChange = () => {},
+}) {
   return (
     <MapContainer
       center={CENTER}
@@ -90,7 +136,7 @@ export default function Map({ vessels, selectedMmsi, onSelectVessel }) {
 
       {/* Geofence polygon — Baía de Guanabara */}
       <Polygon
-        positions={GUANABARA_BAY_POLYGON}
+        positions={geofencePolygon}
         pathOptions={{
           color: '#0ea5e9',
           fillColor: '#0ea5e9',
@@ -98,6 +144,11 @@ export default function Map({ vessels, selectedMmsi, onSelectVessel }) {
           weight: 2,
           dashArray: '6 4',
         }}
+      />
+      <GeofenceEditLayer
+        enabled={isEditingGeofence}
+        polygon={geofencePolygon}
+        onChange={onGeofenceChange}
       />
 
       <VesselMarkers vessels={vessels} onSelect={onSelectVessel} />

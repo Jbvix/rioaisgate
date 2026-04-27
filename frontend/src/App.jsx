@@ -5,7 +5,9 @@ import EventLog from './components/EventLog';
 import VesselList from './components/VesselList';
 import VesselDetail from './components/VesselDetail';
 import Charts from './components/Charts';
+import GeofenceEditor from './components/GeofenceEditor';
 import { useVessels } from './hooks/useVessels';
+import { GUANABARA_BAY_POLYGON } from './constants/geofence';
 
 const TABS = ['Mapa', 'Eventos', 'Embarcações', 'Gráficos'];
 
@@ -13,6 +15,8 @@ export default function App() {
   const { vessels, events, stats, fetchInitial } = useVessels();
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
+  const [editingGeofence, setEditingGeofence] = useState(false);
+  const [geofencePolygon, setGeofencePolygon] = useState(GUANABARA_BAY_POLYGON);
 
   useEffect(() => { fetchInitial(); }, [fetchInitial]);
 
@@ -84,7 +88,26 @@ export default function App() {
           vessels={vessels}
           selectedMmsi={selectedMmsi}
           onSelectVessel={setSelectedMmsi}
+          geofencePolygon={geofencePolygon}
+          isEditingGeofence={editingGeofence}
+          onGeofenceChange={setGeofencePolygon}
         />
+
+        <button
+          className="absolute top-4 right-4 z-[1000] rounded-lg border border-navy-600 bg-navy-800/90 px-3 py-2 text-xs text-white hover:bg-navy-700"
+          onClick={() => setEditingGeofence((v) => !v)}
+        >
+          {editingGeofence ? 'Fechar editor' : 'Editar geofence'}
+        </button>
+
+        {editingGeofence && (
+          <GeofenceEditor
+            polygon={geofencePolygon}
+            defaultPolygon={GUANABARA_BAY_POLYGON}
+            onChange={setGeofencePolygon}
+            onClose={() => setEditingGeofence(false)}
+          />
+        )}
 
         {/* Floating vessel count badge */}
         <div className="absolute bottom-4 right-4 bg-navy-800/90 backdrop-blur rounded-xl px-4 py-2 shadow-xl border border-navy-600 pointer-events-none">
