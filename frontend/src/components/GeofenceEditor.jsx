@@ -53,7 +53,7 @@ export default function GeofenceEditor({
   }
 
   return (
-    <div className="absolute top-3 right-3 z-[1000] w-[340px] rounded-xl border border-navy-600 bg-navy-800/95 p-3 shadow-xl backdrop-blur">
+    <div className="h-full w-full overflow-y-auto p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-semibold text-white">Editor de Geofence</h3>
         <button className="text-xs text-white/60 hover:text-white" onClick={onClose}>
@@ -68,7 +68,7 @@ export default function GeofenceEditor({
       <div className="mt-2 text-xs text-white/80">Pontos: {polygon.length}</div>
 
       <textarea
-        className="mt-2 h-36 w-full rounded-md border border-navy-600 bg-navy-900 p-2 font-mono text-[11px] text-white/90 focus:outline-none"
+        className="mt-2 h-48 w-full rounded-md border border-navy-600 bg-navy-900 p-2 font-mono text-[11px] text-white/90 focus:outline-none"
         value={rawValue}
         onChange={(e) => setRawValue(e.target.value)}
       />

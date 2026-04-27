@@ -4,10 +4,18 @@ const { updatePosition, updateStaticData } = require('./vesselTracker');
 
 const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
 const RECONNECT_DELAY_MS = 5000;
+const SCHEDULE_CHECK_MS = 60 * 1000;
 
 let ws = null;
 let reconnectTimer = null;
 let connected = false;
+let scheduleTimer = null;
+let scheduleActive = false;
+let manualEnabled = null; // null = follow schedule, boolean = force on/off
+
+const FEED_TZ = process.env.AIS_FEED_TIMEZONE || 'America/Sao_Paulo';
+const FEED_START_HOUR = Number(process.env.AIS_FEED_START_HOUR ?? 8);
+const FEED_END_HOUR = Number(process.env.AIS_FEED_END_HOUR ?? 18);
 
 function subscribeMessage() {
   return JSON.stringify({
@@ -18,6 +26,8 @@ function subscribeMessage() {
 }
 
 function connect() {
+  if (!scheduleActive) return;
+
   if (ws) {
     ws.removeAllListeners();
     ws.terminate();
@@ -44,6 +54,7 @@ function connect() {
 
   ws.on('close', (code) => {
     connected = false;
+    if (!scheduleActive) return;
     console.warn(`[AISSTREAM] Disconnected (code ${code}). Reconnecting in ${RECONNECT_DELAY_MS / 1000}s…`);
     scheduleReconnect();
   });
@@ -55,8 +66,77 @@ function connect() {
 }
 
 function scheduleReconnect() {
+  if (!scheduleActive) return;
   clearTimeout(reconnectTimer);
   reconnectTimer = setTimeout(connect, RECONNECT_DELAY_MS);
+}
+
+function getLocalHour(timeZone) {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    hour12: false,
+    hour: '2-digit',
+    timeZone,
+  }).formatToParts(new Date());
+  return Number(parts.find((p) => p.type === 'hour')?.value ?? 0);
+}
+
+function isWithinOperatingWindow(hour) {
+  if (FEED_START_HOUR === FEED_END_HOUR) return true;
+  if (FEED_START_HOUR < FEED_END_HOUR) {
+    return hour >= FEED_START_HOUR && hour < FEED_END_HOUR;
+  }
+  return hour >= FEED_START_HOUR || hour < FEED_END_HOUR;
+}
+
+function stopConnection() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+  if (ws) {
+    ws.removeAllListeners();
+    ws.terminate();
+    ws = null;
+  }
+  connected = false;
+}
+
+function evaluateSchedule() {
+  const hour = getLocalHour(FEED_TZ);
+  const shouldRun = manualEnabled == null
+    ? isWithinOperatingWindow(hour)
+    : manualEnabled;
+
+  if (shouldRun && !scheduleActive) {
+    scheduleActive = true;
+    console.log(`[AISSTREAM] Schedule window open (${FEED_START_HOUR}:00-${FEED_END_HOUR}:00 ${FEED_TZ}). Starting feed.`);
+    connect();
+    return;
+  }
+
+  if (!shouldRun && scheduleActive) {
+    scheduleActive = false;
+    console.log(`[AISSTREAM] Schedule window closed (${FEED_START_HOUR}:00-${FEED_END_HOUR}:00 ${FEED_TZ}). Stopping feed.`);
+    stopConnection();
+  }
+}
+
+function setEnabled(enabled) {
+  if (typeof enabled !== 'boolean') return;
+  manualEnabled = enabled;
+  evaluateSchedule();
+}
+
+function getStatus() {
+  const hour = getLocalHour(FEED_TZ);
+  return {
+    connected,
+    enabled: scheduleActive,
+    manual_enabled: manualEnabled,
+    timezone: FEED_TZ,
+    start_hour: FEED_START_HOUR,
+    end_hour: FEED_END_HOUR,
+    local_hour: hour,
+    within_window: isWithinOperatingWindow(hour),
+  };
 }
 
 async function handleMessage(msg) {
@@ -114,7 +194,10 @@ function start() {
     console.warn('[AISSTREAM] AISSTREAM_API_KEY not set — running without live AIS feed.');
     return;
   }
-  connect();
+
+  evaluateSchedule();
+  clearInterval(scheduleTimer);
+  scheduleTimer = setInterval(evaluateSchedule, SCHEDULE_CHECK_MS);
 }
 
-module.exports = { start, isConnected };
+module.exports = { start, isConnected, setEnabled, getStatus };

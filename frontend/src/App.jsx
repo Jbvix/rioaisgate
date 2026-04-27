@@ -12,11 +12,15 @@ import { GUANABARA_BAY_POLYGON } from './constants/geofence';
 const TABS = ['Mapa', 'Eventos', 'Embarcações', 'Gráficos'];
 
 export default function App() {
-  const { vessels, events, stats, fetchInitial } = useVessels();
+  const { vessels, events, stats, feedStatus, setFeedEnabled, fetchInitial } = useVessels();
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
   const [editingGeofence, setEditingGeofence] = useState(false);
   const [geofencePolygon, setGeofencePolygon] = useState(GUANABARA_BAY_POLYGON);
+  const [togglingFeed, setTogglingFeed] = useState(false);
+  const [baseLayer, setBaseLayer] = useState('osm');
+  const [showSeaMarks, setShowSeaMarks] = useState(true);
+  const [mapMenuOpen, setMapMenuOpen] = useState(false);
 
   useEffect(() => { fetchInitial(); }, [fetchInitial]);
 
@@ -33,8 +37,28 @@ export default function App() {
               <div className="text-white/40 text-xs">Barra da Guanabara</div>
             </div>
             <div className="ml-auto flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <div className={`w-2 h-2 rounded-full ${feedStatus?.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
               <span className="text-xs text-white/40">Live</span>
+              <button
+                className={`ml-2 rounded px-2 py-0.5 text-[10px] font-semibold ${
+                  feedStatus?.enabled
+                    ? 'bg-rose-600 text-white hover:bg-rose-500'
+                    : 'bg-emerald-600 text-white hover:bg-emerald-500'
+                } disabled:opacity-50`}
+                disabled={togglingFeed}
+                onClick={async () => {
+                  try {
+                    setTogglingFeed(true);
+                    await setFeedEnabled(!feedStatus?.enabled);
+                  } catch (err) {
+                    console.error('[AIS] toggle failed:', err.message);
+                  } finally {
+                    setTogglingFeed(false);
+                  }
+                }}
+              >
+                {feedStatus?.enabled ? 'Desligar' : 'Ligar'}
+              </button>
             </div>
           </div>
         </div>
@@ -91,22 +115,63 @@ export default function App() {
           geofencePolygon={geofencePolygon}
           isEditingGeofence={editingGeofence}
           onGeofenceChange={setGeofencePolygon}
+          baseLayer={baseLayer}
+          showSeaMarks={showSeaMarks}
         />
 
-        <button
-          className="absolute top-4 right-4 z-[1000] rounded-lg border border-navy-600 bg-navy-800/90 px-3 py-2 text-xs text-white hover:bg-navy-700"
-          onClick={() => setEditingGeofence((v) => !v)}
-        >
-          {editingGeofence ? 'Fechar editor' : 'Editar geofence'}
-        </button>
+        <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2">
+          <button
+            className="rounded-lg border border-navy-600 bg-navy-800/90 px-3 py-2 text-sm text-white shadow-lg backdrop-blur hover:bg-navy-700"
+            onClick={() => setMapMenuOpen((v) => !v)}
+            title="Menu do mapa"
+          >
+            ☰
+          </button>
+
+          {mapMenuOpen && (
+            <div className="w-64 rounded-lg border border-navy-600 bg-navy-800/95 p-3 text-xs text-white shadow-lg backdrop-blur">
+              <div className="mb-2 font-semibold text-white/90">Camadas do mapa</div>
+              <label className="mb-1 block text-white/70">Base</label>
+              <select
+                className="w-full rounded border border-navy-600 bg-navy-900 px-2 py-1 text-xs"
+                value={baseLayer}
+                onChange={(e) => setBaseLayer(e.target.value)}
+              >
+                <option value="osm">OpenStreetMap</option>
+                <option value="satellite">Satélite</option>
+                <option value="relief">Relevo</option>
+                <option value="light">Light</option>
+                <option value="dark">Dark</option>
+              </select>
+
+              <label className="mt-2 flex items-center gap-2 text-white/80">
+                <input
+                  type="checkbox"
+                  checked={showSeaMarks}
+                  onChange={(e) => setShowSeaMarks(e.target.checked)}
+                />
+                OpenSeaMap
+              </label>
+
+              <button
+                className="mt-3 w-full rounded border border-navy-600 bg-navy-700 px-3 py-2 text-xs text-white hover:bg-navy-600"
+                onClick={() => setEditingGeofence((v) => !v)}
+              >
+                {editingGeofence ? 'Fechar editor geofence' : 'Editar geofence'}
+              </button>
+            </div>
+          )}
+        </div>
 
         {editingGeofence && (
-          <GeofenceEditor
-            polygon={geofencePolygon}
-            defaultPolygon={GUANABARA_BAY_POLYGON}
-            onChange={setGeofencePolygon}
-            onClose={() => setEditingGeofence(false)}
-          />
+          <div className="absolute top-0 right-0 z-[1001] h-full w-[380px] border-l border-navy-600 bg-navy-800/95 shadow-2xl backdrop-blur">
+            <GeofenceEditor
+              polygon={geofencePolygon}
+              defaultPolygon={GUANABARA_BAY_POLYGON}
+              onChange={setGeofencePolygon}
+              onClose={() => setEditingGeofence(false)}
+            />
+          </div>
         )}
 
         {/* Floating vessel count badge */}

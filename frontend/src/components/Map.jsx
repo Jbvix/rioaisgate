@@ -134,7 +134,34 @@ export default function Map({
   geofencePolygon = GUANABARA_BAY_POLYGON,
   isEditingGeofence = false,
   onGeofenceChange = () => {},
+  baseLayer = 'osm',
+  showSeaMarks = true,
 }) {
+  const baseLayers = {
+    osm: {
+      url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    },
+    satellite: {
+      url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      attribution: 'Tiles &copy; Esri',
+    },
+    light: {
+      url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+    },
+    dark: {
+      url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      attribution: '&copy; OpenStreetMap &copy; CARTO',
+    },
+    relief: {
+      url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',
+      attribution: '&copy; OpenTopoMap contributors',
+    },
+  };
+
+  const chosenBase = baseLayers[baseLayer] || baseLayers.osm;
+
   return (
     <MapContainer
       center={CENTER}
@@ -142,18 +169,20 @@ export default function Map({
       style={{ width: '100%', height: '100%' }}
       zoomControl={true}
     >
-      {/* OpenStreetMap base */}
+      {/* Base layer */}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution={chosenBase.attribution}
+        url={chosenBase.url}
       />
 
       {/* OpenSeaMap nautical overlay */}
-      <TileLayer
-        attribution='&copy; <a href="https://www.openseamap.org">OpenSeaMap</a>'
-        url="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
-        opacity={0.8}
-      />
+      {showSeaMarks && (
+        <TileLayer
+          attribution='&copy; <a href="https://www.openseamap.org">OpenSeaMap</a>'
+          url="https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png"
+          opacity={0.8}
+        />
+      )}
 
       {/* Geofence polygon — Baía de Guanabara */}
       <Polygon

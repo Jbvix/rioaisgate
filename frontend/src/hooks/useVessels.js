@@ -6,6 +6,7 @@ export function useVessels() {
   const [vessels, setVessels] = useState({});   // mmsi → vessel
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState(null);
+  const [feedStatus, setFeedStatus] = useState(null);
 
   const fetchInitial = useCallback(async () => {
     try {
@@ -20,6 +21,10 @@ export function useVessels() {
       setVessels(map);
       setEvents(es);
       setStats(ss);
+      fetch(`${API_URL}/api/aisstream/status`)
+        .then((r) => r.json())
+        .then(setFeedStatus)
+        .catch(() => {});
     } catch (err) {
       console.error('[API] fetchInitial:', err.message);
     }
@@ -41,5 +46,17 @@ export function useVessels() {
 
   useWebSocket(handleWsMessage);
 
-  return { vessels, events, stats, fetchInitial };
+  const setFeedEnabled = useCallback(async (enabled) => {
+    const res = await fetch(`${API_URL}/api/aisstream/toggle`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload?.error || 'toggle failed');
+    setFeedStatus(payload);
+    return payload;
+  }, []);
+
+  return { vessels, events, stats, feedStatus, setFeedEnabled, fetchInitial };
 }

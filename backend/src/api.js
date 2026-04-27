@@ -1,7 +1,7 @@
 const express = require('express');
 const db = require('./db');
 const { getActiveVessels, shipTypeLabel } = require('./vesselTracker');
-const { isConnected } = require('./aisstream');
+const { isConnected, getStatus, setEnabled } = require('./aisstream');
 
 const router = express.Router();
 
@@ -34,6 +34,19 @@ function handleApiError(res, label, err) {
 // Health
 router.get('/health', (_req, res) => {
   res.json({ ok: true, aisstream: isConnected(), ts: new Date().toISOString() });
+});
+
+router.get('/aisstream/status', (_req, res) => {
+  res.json(getStatus());
+});
+
+router.post('/aisstream/toggle', (req, res) => {
+  const enabled = req.body?.enabled;
+  if (typeof enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled must be boolean' });
+  }
+  setEnabled(enabled);
+  return res.json(getStatus());
 });
 
 // Active vessels (in-memory, last 30 min)
