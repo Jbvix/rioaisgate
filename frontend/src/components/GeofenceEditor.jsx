@@ -8,6 +8,7 @@ export default function GeofenceEditor({
   polygon,
   defaultPolygon,
   onChange,
+  onSave,
   onClose,
 }) {
   const [rawValue, setRawValue] = useState(JSON.stringify(polygon, null, 2));
@@ -52,6 +53,15 @@ export default function GeofenceEditor({
     setMessage('Poligono resetado para o padrao.');
   }
 
+  function savePolygon() {
+    const ok = onSave?.(polygon);
+    if (ok === false) {
+      setMessage('Falha ao salvar geofence.');
+      return;
+    }
+    setMessage('Geofence salva com sucesso.');
+  }
+
   return (
     <div className="h-full w-full overflow-y-auto p-4">
       <div className="flex items-center justify-between">
@@ -76,6 +86,9 @@ export default function GeofenceEditor({
       <div className="mt-2 flex gap-2">
         <button className="rounded bg-ocean-500 px-2 py-1 text-xs text-white hover:bg-ocean-400" onClick={applyJson}>
           Aplicar JSON
+        </button>
+        <button className="rounded bg-emerald-600 px-2 py-1 text-xs text-white hover:bg-emerald-500" onClick={savePolygon}>
+          Salvar
         </button>
         <button className="rounded bg-navy-600 px-2 py-1 text-xs text-white hover:bg-navy-500" onClick={copyCode}>
           Copiar para backend

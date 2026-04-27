@@ -10,19 +10,45 @@ import { useVessels } from './hooks/useVessels';
 import { GUANABARA_BAY_POLYGON } from './constants/geofence';
 
 const TABS = ['Mapa', 'Eventos', 'Embarcações', 'Gráficos'];
+const GEOFENCE_STORAGE_KEY = 'rioaisgate.geofence.polygon.v1';
+
+function isValidPolygon(points) {
+  return (
+    Array.isArray(points) &&
+    points.length >= 3 &&
+    points.every((p) => Array.isArray(p) && p.length === 2 && Number.isFinite(Number(p[0])) && Number.isFinite(Number(p[1])))
+  );
+}
+
+function loadSavedPolygon() {
+  try {
+    const raw = localStorage.getItem(GEOFENCE_STORAGE_KEY);
+    if (!raw) return GUANABARA_BAY_POLYGON;
+    const parsed = JSON.parse(raw);
+    return isValidPolygon(parsed) ? parsed.map((p) => [Number(p[0]), Number(p[1])]) : GUANABARA_BAY_POLYGON;
+  } catch {
+    return GUANABARA_BAY_POLYGON;
+  }
+}
 
 export default function App() {
   const { vessels, events, stats, feedStatus, setFeedEnabled, fetchInitial } = useVessels();
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
   const [editingGeofence, setEditingGeofence] = useState(false);
-  const [geofencePolygon, setGeofencePolygon] = useState(GUANABARA_BAY_POLYGON);
+  const [geofencePolygon, setGeofencePolygon] = useState(loadSavedPolygon);
   const [togglingFeed, setTogglingFeed] = useState(false);
   const [baseLayer, setBaseLayer] = useState('osm');
   const [showSeaMarks, setShowSeaMarks] = useState(true);
   const [mapMenuOpen, setMapMenuOpen] = useState(false);
 
   useEffect(() => { fetchInitial(); }, [fetchInitial]);
+
+  const saveGeofence = (points) => {
+    if (!isValidPolygon(points)) return false;
+    localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(points));
+    return true;
+  };
 
   return (
     <div className="flex h-screen bg-navy-900 overflow-hidden">
@@ -169,6 +195,7 @@ export default function App() {
               polygon={geofencePolygon}
               defaultPolygon={GUANABARA_BAY_POLYGON}
               onChange={setGeofencePolygon}
+              onSave={saveGeofence}
               onClose={() => setEditingGeofence(false)}
             />
           </div>
