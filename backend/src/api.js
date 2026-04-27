@@ -5,6 +5,32 @@ const { isConnected } = require('./aisstream');
 
 const router = express.Router();
 
+function formatError(err) {
+  if (!err) return 'Unknown error';
+  if (typeof err === 'string') return err;
+
+  if (Array.isArray(err.errors) && err.errors.length > 0) {
+    const nested = err.errors
+      .map((e) => [e.message, e.code].filter(Boolean).join(' '))
+      .filter(Boolean)
+      .join(' | ');
+    if (nested) return nested;
+  }
+
+  return [
+    err.message,
+    err.code ? `code=${err.code}` : null,
+    err.detail ? `detail=${err.detail}` : null,
+    err.hint ? `hint=${err.hint}` : null,
+  ].filter(Boolean).join(' | ') || JSON.stringify(err);
+}
+
+function handleApiError(res, label, err) {
+  const message = formatError(err);
+  console.error(`[API] ${label}: ${message}`);
+  res.status(500).json({ error: message });
+}
+
 // Health
 router.get('/health', (_req, res) => {
   res.json({ ok: true, aisstream: isConnected(), ts: new Date().toISOString() });
@@ -22,7 +48,7 @@ router.get('/events', async (req, res) => {
     const rows = await db.getRecentEvents(limit);
     res.json(rows.map(r => ({ ...r, ship_type_label: shipTypeLabel(r.ship_type) })));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleApiError(res, 'events', err);
   }
 });
 
@@ -37,7 +63,7 @@ router.get('/stats/today', async (_req, res) => {
       inside_bay: active.filter(v => v.insideBay).length,
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleApiError(res, 'stats/today', err);
   }
 });
 
@@ -48,7 +74,7 @@ router.get('/stats/daily', async (req, res) => {
     const rows = await db.getDailyStats(days);
     res.json(rows);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleApiError(res, 'stats/daily', err);
   }
 });
 
@@ -57,7 +83,7 @@ router.get('/stats/hourly', async (_req, res) => {
   try {
     res.json(await db.getHourlyStats());
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleApiError(res, 'stats/hourly', err);
   }
 });
 
@@ -67,7 +93,7 @@ router.get('/stats/ship-types', async (_req, res) => {
     const rows = await db.getShipTypeStats();
     res.json(rows.map(r => ({ ...r, ship_type_label: shipTypeLabel(r.ship_type) })));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleApiError(res, 'stats/ship-types', err);
   }
 });
 
@@ -80,7 +106,7 @@ router.get('/vessels/:mmsi/history', async (req, res) => {
     const rows = await db.getVesselHistory(mmsi, limit);
     res.json(rows.map(r => ({ ...r, ship_type_label: shipTypeLabel(r.ship_type) })));
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    handleApiError(res, 'vessels/:mmsi/history', err);
   }
 });
 
