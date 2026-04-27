@@ -1,7 +1,35 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+function buildPoolConfig() {
+  const connectionString = process.env.DATABASE_URL;
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not set');
+  }
+
+  const needsSsl =
+    connectionString.includes('railway') ||
+    process.env.NODE_ENV === 'production';
+
+  return {
+    connectionString,
+    ssl: needsSsl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 15000,
+  };
+}
+
+function formatDbError(err) {
+  if (!err) return 'Unknown error';
+  return [
+    err.message,
+    err.code ? `code=${err.code}` : null,
+    err.severity ? `severity=${err.severity}` : null,
+    err.detail ? `detail=${err.detail}` : null,
+    err.hint ? `hint=${err.hint}` : null,
+  ].filter(Boolean).join(' | ');
+}
+
+const pool = new Pool(buildPoolConfig());
 
 const sql = `
 CREATE TABLE IF NOT EXISTS vessels (
@@ -52,13 +80,21 @@ $$ LANGUAGE sql;
 `;
 
 (async () => {
+  const timeout = setTimeout(() => {
+    console.error('Migration timeout after 30s');
+    process.exit(1);
+  }, 30000);
+
   try {
+    await pool.query('SELECT 1');
     await pool.query(sql);
     console.log('Migration completed successfully.');
   } catch (err) {
-    console.error('Migration failed:', err);
+    console.error('Migration failed:', formatDbError(err));
+    if (err?.stack) console.error(err.stack);
     process.exit(1);
   } finally {
+    clearTimeout(timeout);
     await pool.end();
   }
 })();
