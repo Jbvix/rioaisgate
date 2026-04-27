@@ -5,6 +5,7 @@ const cors = require('cors');
 const WebSocket = require('ws');
 const api = require('./api');
 const aisstream = require('./aisstream');
+const logger = require('./logger');
 const { setBroadcast } = require('./vesselTracker');
 
 const app = express();
@@ -58,7 +59,7 @@ const server = http.createServer(app);
 server.on('upgrade', (request, socket, head) => {
   const origin = request.headers['origin'];
   if (!isAllowedOrigin(origin)) {
-    console.warn(`[WS] Rejected upgrade from origin: ${origin}`);
+    logger.warn(`[WS] Rejected upgrade from origin: ${origin}`);
     socket.destroy();
     return;
   }
@@ -69,10 +70,10 @@ const wss = new WebSocket.Server({ server, path: '/ws' });
 
 wss.on('connection', (socket, req) => {
   const ip = req.socket.remoteAddress;
-  console.log(`[WS] Client connected: ${ip}`);
+  logger.info(`[WS] Client connected: ${ip}`);
 
-  socket.on('close', () => console.log(`[WS] Client disconnected: ${ip}`));
-  socket.on('error', (err) => console.error(`[WS] Error from ${ip}:`, err.message));
+  socket.on('close', () => logger.info(`[WS] Client disconnected: ${ip}`));
+  socket.on('error', (err) => logger.error(`[WS] Error from ${ip}:`, err.message));
 });
 
 function broadcast(payload) {
@@ -88,6 +89,6 @@ setBroadcast(broadcast);
 
 // ── Start ─────────────────────────────────────────────────────────
 server.listen(PORT, () => {
-  console.log(`[SERVER] Listening on port ${PORT}`);
+  logger.info(`[SERVER] Listening on port ${PORT}`);
   aisstream.start();
 });

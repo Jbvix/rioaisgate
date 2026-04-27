@@ -1,6 +1,7 @@
 const WebSocket = require('ws');
 const { AISSTREAM_BBOX } = require('./geofence');
 const { updatePosition, updateStaticData } = require('./vesselTracker');
+const logger = require('./logger');
 
 const AISSTREAM_URL = 'wss://stream.aisstream.io/v0/stream';
 const RECONNECT_DELAY_MS = 5000;
@@ -33,12 +34,12 @@ function connect() {
     ws.terminate();
   }
 
-  console.log('[AISSTREAM] Connecting…');
+  logger.info('[AISSTREAM] Connecting…');
   ws = new WebSocket(AISSTREAM_URL);
 
   ws.on('open', () => {
     connected = true;
-    console.log('[AISSTREAM] Connected. Subscribing to Barra da Guanabara bbox…');
+    logger.info('[AISSTREAM] Connected. Subscribing to Barra da Guanabara bbox…');
     ws.send(subscribeMessage());
   });
 
@@ -55,12 +56,12 @@ function connect() {
   ws.on('close', (code) => {
     connected = false;
     if (!scheduleActive) return;
-    console.warn(`[AISSTREAM] Disconnected (code ${code}). Reconnecting in ${RECONNECT_DELAY_MS / 1000}s…`);
+    logger.warn(`[AISSTREAM] Disconnected (code ${code}). Reconnecting in ${RECONNECT_DELAY_MS / 1000}s…`);
     scheduleReconnect();
   });
 
   ws.on('error', (err) => {
-    console.error('[AISSTREAM] Error:', err.message);
+    logger.error('[AISSTREAM] Error:', err.message);
     // 'close' will fire after error
   });
 }
@@ -107,14 +108,14 @@ function evaluateSchedule() {
 
   if (shouldRun && !scheduleActive) {
     scheduleActive = true;
-    console.log(`[AISSTREAM] Schedule window open (${FEED_START_HOUR}:00-${FEED_END_HOUR}:00 ${FEED_TZ}). Starting feed.`);
+    logger.info(`[AISSTREAM] Schedule window open (${FEED_START_HOUR}:00-${FEED_END_HOUR}:00 ${FEED_TZ}). Starting feed.`);
     connect();
     return;
   }
 
   if (!shouldRun && scheduleActive) {
     scheduleActive = false;
-    console.log(`[AISSTREAM] Schedule window closed (${FEED_START_HOUR}:00-${FEED_END_HOUR}:00 ${FEED_TZ}). Stopping feed.`);
+    logger.info(`[AISSTREAM] Schedule window closed (${FEED_START_HOUR}:00-${FEED_END_HOUR}:00 ${FEED_TZ}). Stopping feed.`);
     stopConnection();
   }
 }
@@ -191,7 +192,7 @@ function isConnected() {
 
 function start() {
   if (!process.env.AISSTREAM_API_KEY) {
-    console.warn('[AISSTREAM] AISSTREAM_API_KEY not set — running without live AIS feed.');
+    logger.warn('[AISSTREAM] AISSTREAM_API_KEY not set — running without live AIS feed.');
     return;
   }
 

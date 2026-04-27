@@ -1,5 +1,6 @@
 const express = require('express');
 const db = require('./db');
+const logger = require('./logger');
 const { getActiveVessels, shipTypeLabel } = require('./vesselTracker');
 const { isConnected, getStatus, setEnabled } = require('./aisstream');
 
@@ -27,7 +28,7 @@ function formatError(err) {
 
 function handleApiError(res, label, err) {
   const message = formatError(err);
-  console.error(`[API] ${label}: ${message}`);
+  logger.error(`[API] ${label}: ${message}`);
   res.status(500).json({ error: message });
 }
 

@@ -68,6 +68,7 @@ FRONTEND_URL=https://seu-app.netlify.app,http://localhost:5173
 AIS_FEED_TIMEZONE=America/Sao_Paulo
 AIS_FEED_START_HOUR=8
 AIS_FEED_END_HOUR=18
+LOG_LEVEL=info
 ```
 
 ### Frontend (`.env`)

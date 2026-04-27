@@ -1,5 +1,6 @@
 const { isInsideBay } = require('./geofence');
 const db = require('./db');
+const logger = require('./logger');
 
 // In-memory state: mmsi → { lat, lon, insideBay, name, ship_type, speed, heading, course, nav_status, lastSeen }
 const vessels = new Map();
@@ -54,7 +55,7 @@ async function updateStaticData(mmsi, data) {
   try {
     await db.upsertVessel({ mmsi, ...data });
   } catch (err) {
-    console.error(`[DB] upsertVessel ${mmsi}: ${formatError(err)}`);
+    logger.error(`[DB] upsertVessel ${mmsi}: ${formatError(err)}`);
   }
 }
 
@@ -82,7 +83,7 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
     await db.savePosition({ mmsi, lat, lon, speed, heading, course, nav_status });
   } catch (err) {
     // non-critical, but useful for diagnosing DB connectivity/schema drift in prod
-    console.error(`[DB] savePosition ${mmsi}: ${formatError(err)}`);
+    logger.error(`[DB] savePosition ${mmsi}: ${formatError(err)}`);
   }
 
   // Detect crossing
@@ -106,9 +107,9 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
         },
       };
       broadcast(payload);
-      console.log(`[EVENT] ${event_type} | MMSI:${mmsi} | ${updated.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`);
+      logger.info(`[EVENT] ${event_type} | MMSI:${mmsi} | ${updated.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`);
     } catch (err) {
-      console.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
+      logger.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
     }
   }
 

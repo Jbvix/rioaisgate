@@ -1,5 +1,6 @@
 require('dotenv').config();
 const { Pool } = require('pg');
+const logger = require('../logger');
 
 function buildPoolConfig() {
   const connectionString = process.env.DATABASE_URL;
@@ -81,17 +82,17 @@ $$ LANGUAGE sql;
 
 (async () => {
   const timeout = setTimeout(() => {
-    console.error('Migration timeout after 30s');
+    logger.error('Migration timeout after 30s');
     process.exit(1);
   }, 30000);
 
   try {
     await pool.query('SELECT 1');
     await pool.query(sql);
-    console.log('Migration completed successfully.');
+    logger.info('Migration completed successfully.');
   } catch (err) {
-    console.error('Migration failed:', formatDbError(err));
-    if (err?.stack) console.error(err.stack);
+    logger.error('Migration failed:', formatDbError(err));
+    if (err?.stack) logger.error(err.stack);
     process.exit(1);
   } finally {
     clearTimeout(timeout);

@@ -44,6 +44,11 @@ export default function App() {
 
   useEffect(() => { fetchInitial(); }, [fetchInitial]);
 
+  useEffect(() => {
+    if (!isValidPolygon(geofencePolygon)) return;
+    localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(geofencePolygon));
+  }, [geofencePolygon]);
+
   const saveGeofence = (points) => {
     if (!isValidPolygon(points)) return false;
     localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(points));

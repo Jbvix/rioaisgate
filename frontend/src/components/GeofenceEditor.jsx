@@ -74,6 +74,9 @@ export default function GeofenceEditor({
       <p className="mt-2 text-[11px] leading-relaxed text-white/60">
         Clique no mapa para adicionar pontos, arraste os pontos vermelhos e use duplo clique para remover.
       </p>
+      <p className="mt-1 text-[11px] leading-relaxed text-emerald-300/90">
+        Alteracoes sao salvas automaticamente no navegador.
+      </p>
 
       <div className="mt-2 text-xs text-white/80">Pontos: {polygon.length}</div>
 

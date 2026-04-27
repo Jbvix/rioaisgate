@@ -1,4 +1,5 @@
 const { Pool } = require('pg');
+const logger = require('../logger');
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -20,7 +21,7 @@ function formatDbError(err) {
   ].filter(Boolean).join(' | ');
 }
 
-pool.on('error', (err) => console.error('DB pool error:', formatDbError(err)));
+pool.on('error', (err) => logger.error('DB pool error:', formatDbError(err)));
 
 async function logSchemaStatus() {
   try {
@@ -33,12 +34,12 @@ async function logSchemaStatus() {
     const row = res.rows[0] || {};
     const missing = ['vessels', 'vessel_events', 'vessel_positions'].filter((k) => !row[k]);
     if (missing.length > 0) {
-      console.error(`[DB] Missing tables: ${missing.join(', ')}. Run migrations.`);
+      logger.error(`[DB] Missing tables: ${missing.join(', ')}. Run migrations.`);
     } else {
-      console.log('[DB] Schema check OK.');
+      logger.info('[DB] Schema check OK.');
     }
   } catch (err) {
-    console.error('[DB] Schema check failed:', formatDbError(err));
+    logger.error('[DB] Schema check failed:', formatDbError(err));
   }
 }
 
