@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polygon, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polygon, Tooltip, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { GUANABARA_BAY_POLYGON } from '../constants/geofence';
 
@@ -29,6 +29,11 @@ function vesselIcon(vessel) {
 }
 
 function VesselMarkers({ vessels, onSelect }) {
+  const navStatusLabel = (value) => {
+    if (value == null) return 'N/D';
+    return String(value);
+  };
+
   return Object.values(vessels).map(v => {
     if (v.lat == null || v.lon == null) return null;
     return (
@@ -38,6 +43,22 @@ function VesselMarkers({ vessels, onSelect }) {
         icon={vesselIcon(v)}
         eventHandlers={{ click: () => onSelect(v.mmsi) }}
       >
+        <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
+          <div style={{ minWidth: 220, fontSize: '0.75rem', lineHeight: 1.45 }}>
+            <div style={{ fontWeight: 700 }}>{v.name || 'Embarcação desconhecida'}</div>
+            <div>MMSI: {v.mmsi}</div>
+            <div>Tipo: {v.ship_type_label || 'N/D'}</div>
+            <div>Bandeira: {v.flag || 'N/D'}</div>
+            <div>Velocidade: {v.speed != null ? `${v.speed} nós` : 'N/D'}</div>
+            <div>Proa: {v.heading != null ? `${v.heading}°` : 'N/D'}</div>
+            <div>Rumo: {v.course != null ? `${v.course}°` : 'N/D'}</div>
+            <div>Status navegação: {navStatusLabel(v.nav_status)}</div>
+            <div>Posição: {Number(v.lat).toFixed(5)}, {Number(v.lon).toFixed(5)}</div>
+            <div style={{ color: v.insideBay ? '#22c55e' : '#0ea5e9' }}>
+              {v.insideBay ? 'Dentro da baía' : 'Fora da baía'}
+            </div>
+          </div>
+        </Tooltip>
         <Popup>
           <div style={{ minWidth: 160 }}>
             <strong>{v.name || 'Embarcação desconhecida'}</strong>
