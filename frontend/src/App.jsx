@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Map from './components/Map';
 import Dashboard from './components/Dashboard';
 import EventLog from './components/EventLog';
@@ -8,9 +8,31 @@ import Charts from './components/Charts';
 import GeofenceEditor from './components/GeofenceEditor';
 import { useVessels } from './hooks/useVessels';
 import { GUANABARA_BAY_POLYGON } from './constants/geofence';
+import { playGeofenceAlert } from './utils/playGeofenceAlert';
 
 const TABS = ['Mapa', 'Eventos', 'Embarcações', 'Gráficos'];
 const GEOFENCE_STORAGE_KEY = 'rioaisgate.geofence.polygon.v1';
+const GEOFENCE_WATCH_STORAGE_KEY = 'rioaisgate.geofence.watch.v1';
+
+function loadGeofenceWatch() {
+  try {
+    const raw = sessionStorage.getItem(GEOFENCE_WATCH_STORAGE_KEY);
+    if (!raw) return {};
+    const o = JSON.parse(raw);
+    if (o && typeof o === 'object') return o;
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
+function saveGeofenceWatch(map) {
+  try {
+    sessionStorage.setItem(GEOFENCE_WATCH_STORAGE_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
 
 function isValidPolygon(points) {
   return (
@@ -32,7 +54,21 @@ function loadSavedPolygon() {
 }
 
 export default function App() {
-  const { vessels, events, stats, feedStatus, fetchInitial } = useVessels();
+  const [geofenceWatch, setGeofenceWatch] = useState(loadGeofenceWatch);
+  const watchRef = useRef(geofenceWatch);
+  watchRef.current = geofenceWatch;
+
+  const onGeofenceEvent = useCallback((event) => {
+    const id = String(event?.mmsi ?? '');
+    const rule = watchRef.current[id];
+    if (!rule || !event?.event_type) return;
+    const t = event.event_type;
+    if (rule === 'BOTH' || rule === t) {
+      playGeofenceAlert(t === 'ENTRY' ? 'entry' : 'exit');
+    }
+  }, []);
+
+  const { vessels, events, stats, feedStatus, fetchInitial } = useVessels(onGeofenceEvent);
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
   const [editingGeofence, setEditingGeofence] = useState(false);
@@ -53,6 +89,34 @@ export default function App() {
     localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(points));
     return true;
   };
+
+  const updateGeofenceWatch = useCallback((updater) => {
+    setGeofenceWatch((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveGeofenceWatch(next);
+      return next;
+    });
+  }, []);
+
+  const toggleGeofenceWatch = useCallback(
+    (mmsi, enabled) => {
+      const id = String(mmsi);
+      if (!enabled) {
+        updateGeofenceWatch((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        return;
+      }
+      const v = vessels[id];
+      let rule = 'BOTH';
+      if (v?.insideBay === true) rule = 'EXIT';
+      else if (v?.insideBay === false) rule = 'ENTRY';
+      updateGeofenceWatch((prev) => ({ ...prev, [id]: rule }));
+    },
+    [vessels, updateGeofenceWatch],
+  );
 
   return (
     <div className="flex h-screen bg-navy-900 overflow-hidden">
@@ -110,6 +174,8 @@ export default function App() {
               mmsi={selectedMmsi}
               vessels={vessels}
               onClose={() => setSelectedMmsi(null)}
+              geofenceWatchRule={geofenceWatch[String(selectedMmsi)]}
+              onToggleGeofenceWatch={(enabled) => toggleGeofenceWatch(selectedMmsi, enabled)}
             />
           </div>
         )}

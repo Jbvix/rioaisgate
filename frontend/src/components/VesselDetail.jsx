@@ -7,8 +7,13 @@ const NAV_STATUS = [
   'Calado restrito', 'Amarrado', 'Encalhado', 'Pescando', 'Navegando (vela)',
 ];
 
-export default function VesselDetail({ mmsi, vessels, onClose }) {
-  const vessel = vessels[mmsi];
+export default function VesselDetail({
+  mmsi,
+  vessels,
+  onClose,
+  geofenceWatchRule,
+  onToggleGeofenceWatch,
+}) {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
@@ -20,6 +25,9 @@ export default function VesselDetail({ mmsi, vessels, onClose }) {
   }, [mmsi]);
 
   if (!mmsi) return null;
+
+  const vessel = vessels[mmsi] || vessels[String(mmsi)];
+  const watching = geofenceWatchRule != null && geofenceWatchRule !== '';
 
   return (
     <div className="bg-navy-800 rounded-xl p-4 flex flex-col gap-3 shadow-xl border border-navy-600">
@@ -37,6 +45,39 @@ export default function VesselDetail({ mmsi, vessels, onClose }) {
           ×
         </button>
       </div>
+
+      {onToggleGeofenceWatch && (
+        <div className="rounded-lg border border-navy-600 bg-navy-700/50 p-3">
+          <button
+            type="button"
+            onClick={() => onToggleGeofenceWatch(!watching)}
+            className={`w-full rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+              watching
+                ? 'bg-amber-600/30 text-amber-200 border border-amber-500/40 hover:bg-amber-600/40'
+                : 'bg-ocean-500/20 text-ocean-300 border border-ocean-500/40 hover:bg-ocean-500/30'
+            }`}
+          >
+            {watching ? '🔕 Desativar alerta da barra' : '🔔 Alerta ao cruzar a barra'}
+          </button>
+          <p className="text-xs text-white/45 mt-2 leading-relaxed">
+            {watching ? (
+              geofenceWatchRule === 'ENTRY' ? (
+                <>Alerta ativo: toca quando a embarcação <span className="text-emerald-400/90">entrar</span> na baía.</>
+              ) : geofenceWatchRule === 'EXIT' ? (
+                <>Alerta ativo: toca quando a embarcação <span className="text-rose-400/90">sair</span> da baía.</>
+              ) : (
+                <>Alerta ativo: toca em <span className="text-white/60">entrada ou saída</span> (posição desconhecida no momento da ativação).</>
+              )
+            ) : vessel?.insideBay === false ? (
+              'Fora da baía: o som toca na entrada. Reativar o alerta se a embarcação mudar de lado.'
+            ) : vessel?.insideBay === true ? (
+              'Dentro da baía: o som toca na saída. Reativar o alerta se a embarcação mudar de lado.'
+            ) : (
+              'Quando a posição em relação à baía for desconhecida, o alerta dispara em qualquer cruzamento.'
+            )}
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-2 text-sm">
         <Info label="Tipo" value={vessel?.ship_type_label} />
