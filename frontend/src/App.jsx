@@ -72,8 +72,10 @@ export default function App() {
                 feedStatus == null
                   ? 'Verificando feed AIS…'
                   : feedStatus.connected
-                    ? 'Feed AIS conectado'
-                    : 'Feed AIS indisponível ou reconectando'
+                    ? 'Feed AIS conectado (sinal em tempo real)'
+                    : feedStatus.within_window === false
+                      ? `AIS pausado fora da janela (${feedStatus.start_hour}h–${feedStatus.end_hour}h ${feedStatus.timezone || 'America/Sao_Paulo'})`
+                      : 'Dentro da janela, mas sem conexão AIS — reconectando ou falha de credencial/serviço'
               }
             >
               <div
@@ -82,10 +84,18 @@ export default function App() {
                     ? 'bg-white/30'
                     : feedStatus.connected
                       ? 'bg-emerald-400 animate-pulse'
-                      : 'bg-amber-400'
+                      : feedStatus.within_window === false
+                        ? 'bg-sky-500/90'
+                        : 'bg-amber-400 animate-pulse'
                 }`}
               />
-              <span className="text-xs text-white/60">Live</span>
+              <span className="text-xs text-white/60">
+                {feedStatus?.connected
+                  ? 'Live'
+                  : feedStatus?.within_window === false
+                    ? 'Standby'
+                    : 'Sem sinal'}
+              </span>
             </div>
           </div>
         </div>

@@ -13,12 +13,25 @@ const PORT = process.env.PORT || 3001;
 
 const FALLBACK_ORIGINS = [
   'https://loquacious-kelpie-f684a4.netlify.app',
+  'https://riogateais.netlify.app',
   'http://localhost:5173',
   'http://127.0.0.1:5173',
 ];
 
+/** Netlify branch/deploy previews: https://{deploy-id}--{site-slug}.netlify.app */
+const NETLIFY_SITE_SLUG = (process.env.NETLIFY_SITE_SLUG || 'riogateais').toLowerCase();
+
 function normalizeOrigin(origin) {
   return String(origin || '').trim().replace(/\/$/, '').toLowerCase();
+}
+
+function isNetlifyDeployPreview(origin) {
+  if (!NETLIFY_SITE_SLUG) return false;
+  const n = normalizeOrigin(origin);
+  const suffix = `--${NETLIFY_SITE_SLUG}.netlify.app`;
+  if (!n.startsWith('https://') || !n.endsWith(suffix)) return false;
+  const deployId = n.slice('https://'.length, -suffix.length);
+  return /^[0-9a-z]+$/.test(deployId) && deployId.length > 0;
 }
 
 const allowedOrigins = new Set(
@@ -35,7 +48,10 @@ if (allowedOrigins.size === 0) {
 function isAllowedOrigin(origin) {
   // Requests without Origin are usually server-to-server and should pass.
   if (!origin) return true;
-  return allowedOrigins.has(normalizeOrigin(origin));
+  const norm = normalizeOrigin(origin);
+  if (allowedOrigins.has(norm)) return true;
+  if (isNetlifyDeployPreview(origin)) return true;
+  return false;
 }
 
 const corsOptions = {
