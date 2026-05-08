@@ -6,6 +6,8 @@ import { useWebSocket } from './useWebSocket';
 const CLIENT_VESSEL_GRACE_MS = 120 * 60 * 1000; // 2 h após última atualização recebida
 
 const POLL_MS = 45_000;
+const VESSELS_PERSIST_KEY = 'rioaisgate.vessels.persist.v1';
+const PERSIST_DEBOUNCE_MS = 200;
 
 function vesselsArrayToMap(vs) {
   const map = {};
@@ -16,14 +18,79 @@ function vesselsArrayToMap(vs) {
   return map;
 }
 
+function pruneExpiredFromCache(vessels, lastTouch) {
+  const now = Date.now();
+  const v = { ...vessels };
+  const t = { ...lastTouch };
+  for (const id of Object.keys(v)) {
+    const ts = t[id];
+    if (ts != null && now - ts > CLIENT_VESSEL_GRACE_MS) {
+      delete v[id];
+      delete t[id];
+    }
+  }
+  return { vessels: v, lastTouch: t };
+}
+
+function loadPersistedVessels() {
+  try {
+    const raw = localStorage.getItem(VESSELS_PERSIST_KEY);
+    if (!raw) return { vessels: {}, lastTouch: {} };
+    const o = JSON.parse(raw);
+    if (!o || typeof o !== 'object') return { vessels: {}, lastTouch: {} };
+    const vessels =
+      o.vessels && typeof o.vessels === 'object' && !Array.isArray(o.vessels) ? o.vessels : {};
+    const lastTouch =
+      o.lastTouch && typeof o.lastTouch === 'object' && !Array.isArray(o.lastTouch)
+        ? o.lastTouch
+        : {};
+    return pruneExpiredFromCache(vessels, lastTouch);
+  } catch {
+    return { vessels: {}, lastTouch: {} };
+  }
+}
+
+function persistVesselsToStorage(vessels, lastTouch) {
+  try {
+    localStorage.setItem(
+      VESSELS_PERSIST_KEY,
+      JSON.stringify({ vessels, lastTouch, savedAt: Date.now() }),
+    );
+  } catch (e) {
+    if (e?.name === 'QuotaExceededError') {
+      try {
+        const ids = Object.keys(vessels);
+        if (ids.length > 80) {
+          const lastTouchCopy = { ...lastTouch };
+          const vesselsCopy = { ...vessels };
+          ids
+            .sort((a, b) => (lastTouchCopy[b] ?? 0) - (lastTouchCopy[a] ?? 0))
+            .slice(80)
+            .forEach((id) => {
+              delete vesselsCopy[id];
+              delete lastTouchCopy[id];
+            });
+          localStorage.setItem(
+            VESSELS_PERSIST_KEY,
+            JSON.stringify({ vessels: vesselsCopy, lastTouch: lastTouchCopy, savedAt: Date.now() }),
+          );
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+const initialPersisted = loadPersistedVessels();
+
 export function useVessels(onGeofenceEvent) {
-  const [vessels, setVessels] = useState({}); // mmsi → vessel
+  const [vessels, setVessels] = useState(() => ({ ...initialPersisted.vessels }));
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState(null);
   const [feedStatus, setFeedStatus] = useState(null);
 
-  /** Última vez que recebemos dado deste MMSI (API ou WS) — usado para fantasma na tela */
-  const lastTouchRef = useRef({});
+  const lastTouchRef = useRef({ ...initialPersisted.lastTouch });
 
   const onGeofenceEventRef = useRef(onGeofenceEvent);
   onGeofenceEventRef.current = onGeofenceEvent;
@@ -130,6 +197,13 @@ export function useVessels(onGeofenceEvent) {
       clearInterval(id);
     };
   }, [mergeFromApi]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      persistVesselsToStorage(vessels, lastTouchRef.current);
+    }, PERSIST_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [vessels]);
 
   return { vessels, events, stats, feedStatus, fetchInitial };
 }
