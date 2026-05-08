@@ -1,13 +1,10 @@
 import React from 'react';
+import { formatOccurredAt } from '../utils/formatOccurredAt';
 
 const TYPE_STYLES = {
   ENTRY: { bg: 'bg-emerald-500/20 border-emerald-500/40', text: 'text-emerald-400', label: '▶ ENTRADA' },
   EXIT:  { bg: 'bg-rose-500/20 border-rose-500/40',       text: 'text-rose-400',    label: '◀ SAÍDA' },
 };
-
-function formatTime(ts) {
-  return new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
 
 export default function EventLog({ events, onSelectVessel }) {
   if (!events.length) {
@@ -30,7 +27,7 @@ export default function EventLog({ events, onSelectVessel }) {
           >
             <div className="flex items-center justify-between gap-2">
               <span className={`text-xs font-bold ${style.text}`}>{style.label}</span>
-              <span className="text-xs text-white/40">{formatTime(e.occurred_at)}</span>
+              <span className="text-xs text-white/40 whitespace-nowrap">{formatOccurredAt(e.occurred_at)}</span>
             </div>
             <div className="text-sm text-white font-medium truncate mt-0.5">
               {e.name || 'Embarcação desconhecida'}

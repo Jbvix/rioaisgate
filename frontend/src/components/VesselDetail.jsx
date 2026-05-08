@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from '../config';
+import { formatOccurredAt } from '../utils/formatOccurredAt';
 
 const NAV_STATUS = [
   'Navegando (motor)', 'Fundeado', 'Não governável', 'Manob. restrita',
@@ -56,9 +57,7 @@ export default function VesselDetail({ mmsi, vessels, onClose }) {
                 <span className={e.event_type === 'ENTRY' ? 'text-emerald-400' : 'text-rose-400'}>
                   {e.event_type === 'ENTRY' ? '▶' : '◀'} {e.event_type}
                 </span>
-                <span className="text-white/50">
-                  {new Date(e.occurred_at).toLocaleString('pt-BR')}
-                </span>
+                <span className="text-white/50">{formatOccurredAt(e.occurred_at)}</span>
               </div>
             ))}
           </div>
