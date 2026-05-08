@@ -32,12 +32,11 @@ function loadSavedPolygon() {
 }
 
 export default function App() {
-  const { vessels, events, stats, feedStatus, setFeedEnabled, fetchInitial } = useVessels();
+  const { vessels, events, stats, feedStatus, fetchInitial } = useVessels();
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
   const [editingGeofence, setEditingGeofence] = useState(false);
   const [geofencePolygon, setGeofencePolygon] = useState(loadSavedPolygon);
-  const [togglingFeed, setTogglingFeed] = useState(false);
   const [baseLayer, setBaseLayer] = useState('osm');
   const [showSeaMarks, setShowSeaMarks] = useState(true);
   const [mapMenuOpen, setMapMenuOpen] = useState(false);
@@ -67,29 +66,26 @@ export default function App() {
               <div className="text-white font-bold text-sm leading-tight">RioAISGate</div>
               <div className="text-white/40 text-xs">Barra da Guanabara</div>
             </div>
-            <div className="ml-auto flex items-center gap-1.5">
-              <div className={`w-2 h-2 rounded-full ${feedStatus?.enabled ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
-              <span className="text-xs text-white/40">Live</span>
-              <button
-                className={`ml-2 rounded px-2 py-0.5 text-[10px] font-semibold ${
-                  feedStatus?.enabled
-                    ? 'bg-rose-600 text-white hover:bg-rose-500'
-                    : 'bg-emerald-600 text-white hover:bg-emerald-500'
-                } disabled:opacity-50`}
-                disabled={togglingFeed}
-                onClick={async () => {
-                  try {
-                    setTogglingFeed(true);
-                    await setFeedEnabled(!feedStatus?.enabled);
-                  } catch (err) {
-                    console.error('[AIS] toggle failed:', err.message);
-                  } finally {
-                    setTogglingFeed(false);
-                  }
-                }}
-              >
-                {feedStatus?.enabled ? 'Desligar' : 'Ligar'}
-              </button>
+            <div
+              className="ml-auto flex items-center gap-1.5"
+              title={
+                feedStatus == null
+                  ? 'Verificando feed AIS…'
+                  : feedStatus.connected
+                    ? 'Feed AIS conectado'
+                    : 'Feed AIS indisponível ou reconectando'
+              }
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  feedStatus == null
+                    ? 'bg-white/30'
+                    : feedStatus.connected
+                      ? 'bg-emerald-400 animate-pulse'
+                      : 'bg-amber-400'
+                }`}
+              />
+              <span className="text-xs text-white/60">Live</span>
             </div>
           </div>
         </div>

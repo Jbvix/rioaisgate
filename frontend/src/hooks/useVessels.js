@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { API_URL } from '../config';
 import { useWebSocket } from './useWebSocket';
 
@@ -24,7 +24,7 @@ export function useVessels() {
       fetch(`${API_URL}/api/aisstream/status`)
         .then((r) => r.json())
         .then(setFeedStatus)
-        .catch(() => {});
+        .catch(() => setFeedStatus(null));
     } catch (err) {
       console.error('[API] fetchInitial:', err.message);
     }
@@ -46,17 +46,25 @@ export function useVessels() {
 
   useWebSocket(handleWsMessage);
 
-  const setFeedEnabled = useCallback(async (enabled) => {
-    const res = await fetch(`${API_URL}/api/aisstream/toggle`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ enabled }),
-    });
-    const payload = await res.json();
-    if (!res.ok) throw new Error(payload?.error || 'toggle failed');
-    setFeedStatus(payload);
-    return payload;
+  useEffect(() => {
+    let cancelled = false;
+    const poll = () => {
+      fetch(`${API_URL}/api/aisstream/status`)
+        .then((r) => r.json())
+        .then((data) => {
+          if (!cancelled) setFeedStatus(data);
+        })
+        .catch(() => {
+          if (!cancelled) setFeedStatus(null);
+        });
+    };
+    poll();
+    const id = setInterval(poll, 45_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, []);
 
-  return { vessels, events, stats, feedStatus, setFeedEnabled, fetchInitial };
+  return { vessels, events, stats, feedStatus, fetchInitial };
 }

@@ -86,30 +86,30 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
     logger.error(`[DB] savePosition ${mmsi}: ${formatError(err)}`);
   }
 
-  // Detect crossing
-  if (wasInside === null) return; // first observation — no crossing yet
+  // Crossing detection needs a prior inside/outside state (skip first observation only for EVENT)
+  if (wasInside !== null) {
+    let event_type = null;
+    if (!wasInside && nowInside) event_type = 'ENTRY';
+    if (wasInside && !nowInside) event_type = 'EXIT';
 
-  let event_type = null;
-  if (!wasInside && nowInside) event_type = 'ENTRY';
-  if (wasInside && !nowInside) event_type = 'EXIT';
-
-  if (event_type) {
-    try {
-      const event = await db.recordEvent({ mmsi, event_type, lat, lon, speed, heading });
-      const payload = {
-        type: 'EVENT',
-        event: {
-          ...event,
-          name: updated.name || 'N/D',
-          ship_type: updated.ship_type,
-          ship_type_label: shipTypeLabel(updated.ship_type),
-          flag: updated.flag,
-        },
-      };
-      broadcast(payload);
-      logger.info(`[EVENT] ${event_type} | MMSI:${mmsi} | ${updated.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`);
-    } catch (err) {
-      logger.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
+    if (event_type) {
+      try {
+        const event = await db.recordEvent({ mmsi, event_type, lat, lon, speed, heading });
+        const payload = {
+          type: 'EVENT',
+          event: {
+            ...event,
+            name: updated.name || 'N/D',
+            ship_type: updated.ship_type,
+            ship_type_label: shipTypeLabel(updated.ship_type),
+            flag: updated.flag,
+          },
+        };
+        broadcast(payload);
+        logger.info(`[EVENT] ${event_type} | MMSI:${mmsi} | ${updated.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`);
+      } catch (err) {
+        logger.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
+      }
     }
   }
 
