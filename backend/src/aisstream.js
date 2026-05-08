@@ -15,8 +15,15 @@ let scheduleActive = false;
 let manualEnabled = null; // null = follow schedule, boolean = force on/off
 
 const FEED_TZ = process.env.AIS_FEED_TIMEZONE || 'America/Sao_Paulo';
-const FEED_START_HOUR = Number(process.env.AIS_FEED_START_HOUR ?? 8);
-const FEED_END_HOUR = Number(process.env.AIS_FEED_END_HOUR ?? 18);
+
+/** Horários iguais (ex.: 0 e 0) = feed AIS 24h. Valores diferentes = janela [start, end) no fuso FEED_TZ. */
+function parseFeedHour(value, fallback) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+const FEED_START_HOUR = parseFeedHour(process.env.AIS_FEED_START_HOUR, 0);
+const FEED_END_HOUR = parseFeedHour(process.env.AIS_FEED_END_HOUR, 0);
 
 function subscribeMessage() {
   return JSON.stringify({

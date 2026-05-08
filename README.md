@@ -66,10 +66,13 @@ DATABASE_URL=postgresql://user:pass@host:5432/rioaisgate
 AISSTREAM_API_KEY=sua_chave_aisstream
 FRONTEND_URL=https://seu-app.netlify.app,http://localhost:5173
 AIS_FEED_TIMEZONE=America/Sao_Paulo
-AIS_FEED_START_HOUR=8
-AIS_FEED_END_HOUR=18
+# START e END iguais (ex.: 0 e 0) = feed AIS 24h. Para limitar ao horário comercial use 8 e 18.
+AIS_FEED_START_HOUR=0
+AIS_FEED_END_HOUR=0
 LOG_LEVEL=info
 ```
+
+No **Railway**, use os mesmos nomes no painel **Variables**. Se o projeto já tinha `AIS_FEED_START_HOUR=8` e `AIS_FEED_END_HOUR=18`, atualize ambos para **`0`** (horários iguais = AIS 24h) ou remova essas duas variáveis para aplicar o novo padrão do código após o deploy.
 
 ### Frontend (`.env`)
 
