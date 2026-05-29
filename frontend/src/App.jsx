@@ -116,6 +116,7 @@ export default function App() {
             <div>
               <div className="text-white font-bold text-sm leading-tight">RioAISGate</div>
               <div className="text-white/40 text-xs">Barra da Guanabara</div>
+              <div className="text-white/30 text-[10px] mt-0.5">Jossian Brito · TugLife Systems</div>
             </div>
             <div
               className="ml-auto flex items-center gap-1.5"

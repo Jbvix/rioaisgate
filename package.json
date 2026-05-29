@@ -2,6 +2,7 @@
   "name": "rioaisgate",
   "version": "1.0.0",
   "description": "Monitor de tráfego de embarcações — Barra da Guanabara",
+  "author": "Jossian Brito · TugLife Systems",
   "scripts": {
     "build": "cd backend && npm install --omit=dev",
     "start": "cd backend && node src/index.js",
