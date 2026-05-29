@@ -5,7 +5,6 @@ import EventLog from './components/EventLog';
 import VesselList from './components/VesselList';
 import VesselDetail from './components/VesselDetail';
 import Charts from './components/Charts';
-import GeofenceEditor from './components/GeofenceEditor';
 import { useVessels } from './hooks/useVessels';
 import { GUANABARA_BAY_POLYGON } from './constants/geofence';
 import { playGeofenceAlert } from './utils/playGeofenceAlert';
@@ -71,24 +70,12 @@ export default function App() {
   const { vessels, events, stats, feedStatus, fetchInitial } = useVessels(onGeofenceEvent);
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
-  const [editingGeofence, setEditingGeofence] = useState(false);
-  const [geofencePolygon, setGeofencePolygon] = useState(loadSavedPolygon);
+  const [geofencePolygon] = useState(loadSavedPolygon);
   const [baseLayer, setBaseLayer] = useState('osm');
   const [showSeaMarks, setShowSeaMarks] = useState(true);
   const [mapMenuOpen, setMapMenuOpen] = useState(false);
 
   useEffect(() => { fetchInitial(); }, [fetchInitial]);
-
-  useEffect(() => {
-    if (!isValidPolygon(geofencePolygon)) return;
-    localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(geofencePolygon));
-  }, [geofencePolygon]);
-
-  const saveGeofence = (points) => {
-    if (!isValidPolygon(points)) return false;
-    localStorage.setItem(GEOFENCE_STORAGE_KEY, JSON.stringify(points));
-    return true;
-  };
 
   const updateGeofenceWatch = useCallback((updater) => {
     setGeofenceWatch((prev) => {
@@ -216,8 +203,6 @@ export default function App() {
           selectedMmsi={selectedMmsi}
           onSelectVessel={setSelectedMmsi}
           geofencePolygon={geofencePolygon}
-          isEditingGeofence={editingGeofence}
-          onGeofenceChange={setGeofencePolygon}
           baseLayer={baseLayer}
           showSeaMarks={showSeaMarks}
         />
@@ -255,28 +240,9 @@ export default function App() {
                 />
                 OpenSeaMap
               </label>
-
-              <button
-                className="mt-3 w-full rounded border border-navy-600 bg-navy-700 px-3 py-2 text-xs text-white hover:bg-navy-600"
-                onClick={() => setEditingGeofence((v) => !v)}
-              >
-                {editingGeofence ? 'Fechar editor geofence' : 'Editar geofence'}
-              </button>
             </div>
           )}
         </div>
-
-        {editingGeofence && (
-          <div className="absolute top-0 right-0 z-[1001] h-full w-[380px] border-l border-navy-600 bg-navy-800/95 shadow-2xl backdrop-blur">
-            <GeofenceEditor
-              polygon={geofencePolygon}
-              defaultPolygon={GUANABARA_BAY_POLYGON}
-              onChange={setGeofencePolygon}
-              onSave={saveGeofence}
-              onClose={() => setEditingGeofence(false)}
-            />
-          </div>
-        )}
 
         {/* Floating vessel count badge */}
         <div className="absolute bottom-4 right-4 bg-navy-800/90 backdrop-blur rounded-xl px-4 py-2 shadow-xl border border-navy-600 pointer-events-none">
