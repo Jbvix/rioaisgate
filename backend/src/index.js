@@ -8,6 +8,7 @@ const aisstream = require('./aisstream');
 const logger = require('./logger');
 const { setBroadcast } = require('./vesselTracker');
 const { startDbWriteQueue } = require('./db/writeQueue');
+const { startRetentionSchedule } = require('./db/retention');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -108,5 +109,6 @@ setBroadcast(broadcast);
 server.listen(PORT, () => {
   logger.info(`[SERVER] Listening on port ${PORT}`);
   startDbWriteQueue();
+  startRetentionSchedule();
   aisstream.start();
 });
