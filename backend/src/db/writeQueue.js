@@ -8,8 +8,12 @@ const UPSERT_FLUSH_MS = Number(process.env.AIS_UPSERT_FLUSH_MS) || 5_000;
 const POSITION_PERSIST_MS =
   Number(process.env.AIS_POSITION_PERSIST_MINUTES) > 0
     ? Number(process.env.AIS_POSITION_PERSIST_MINUTES) * 60_000
-    : Number(process.env.AIS_POSITION_PERSIST_MS) || 5 * 60_000;
+    : Number(process.env.AIS_POSITION_PERSIST_MS) || 15 * 60_000;
+/** Após restart/redeploy, não grava trilhas por este período (evita rajada). */
+const POSITION_PERSIST_WARMUP_MS =
+  Number(process.env.AIS_POSITION_PERSIST_WARMUP_MS) || 120_000;
 
+const serverStartedAt = Date.now();
 const positionQueue = [];
 const lastPersistByMmsi = new Map();
 const upsertByMmsi = new Map();
@@ -17,6 +21,10 @@ let positionTimer = null;
 let upsertTimer = null;
 let flushingPositions = false;
 let flushingUpserts = false;
+
+function persistPositionsEnabled() {
+  return process.env.AIS_SAVE_POSITIONS === 'true';
+}
 
 function formatError(err) {
   if (!err) return 'Unknown error';
@@ -30,12 +38,14 @@ function formatError(err) {
 }
 
 function enqueuePosition(row) {
+  if (!persistPositionsEnabled()) return;
+  if (Date.now() - serverStartedAt < POSITION_PERSIST_WARMUP_MS) return;
+
   const mmsi = row?.mmsi;
   if (!mmsi) return;
   const now = Date.now();
   const last = lastPersistByMmsi.get(mmsi) || 0;
   if (now - last < POSITION_PERSIST_MS) return;
-  lastPersistByMmsi.set(mmsi, now);
 
   positionQueue.push(row);
   if (positionQueue.length > POSITION_BATCH_MAX * 3) {
@@ -64,6 +74,7 @@ async function flushPositions() {
   try {
     for (const row of batch) {
       await db.savePosition(row);
+      lastPersistByMmsi.set(row.mmsi, Date.now());
     }
   } catch (err) {
     logger.error(`[DB] savePosition batch failed: ${formatError(err)}`);
@@ -96,9 +107,13 @@ async function flushUpserts() {
 }
 
 function startDbWriteQueue() {
-  const persistPositions = process.env.AIS_SAVE_POSITIONS !== 'false';
+  const persistPositions = persistPositionsEnabled();
   logger.info(
-    `[DB] Write queue active — positions: ${persistPositions ? `flush ${POSITION_FLUSH_MS}ms, 1 grav./${Math.round(POSITION_PERSIST_MS / 60000)}min/MMSI` : 'disabled'}, upserts every ${UPSERT_FLUSH_MS}ms`,
+    `[DB] Write queue active — positions: ${
+      persistPositions
+        ? `flush ${POSITION_FLUSH_MS}ms, 1 grav./${Math.round(POSITION_PERSIST_MS / 60000)}min/MMSI, warmup ${Math.round(POSITION_PERSIST_WARMUP_MS / 1000)}s`
+        : 'disabled (AIS_SAVE_POSITIONS≠true)'
+    }, upserts every ${UPSERT_FLUSH_MS}ms`,
   );
 }
 

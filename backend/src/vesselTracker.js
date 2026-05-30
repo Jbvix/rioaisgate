@@ -3,7 +3,8 @@ const db = require('./db');
 const { enqueuePosition, enqueueUpsert } = require('./db/writeQueue');
 const logger = require('./logger');
 
-const persistPositions = process.env.AIS_SAVE_POSITIONS !== 'false';
+/** Trilhas brutas no Postgres — opt-in; mapa e eventos não dependem disso. */
+const persistPositions = process.env.AIS_SAVE_POSITIONS === 'true';
 
 /** Leituras AIS consecutivas iguais antes de confirmar dentro/fora (evita jitter na boca da barra). */
 const GEOFENCE_CONFIRM_READS = Math.max(2, Number(process.env.GEOFENCE_CONFIRM_READS) || 2);
