@@ -57,7 +57,9 @@ function connect() {
     } catch {
       return;
     }
-    await handleMessage(msg);
+    handleMessage(msg).catch((err) => {
+      logger.error('[AISSTREAM] handleMessage error:', err.message);
+    });
   });
 
   ws.on('close', (code) => {
@@ -147,7 +149,7 @@ function getStatus() {
   };
 }
 
-async function handleMessage(msg) {
+function handleMessage(msg) {
   const type = msg.MessageType;
   const meta = msg.MetaData || {};
   const mmsi = String(meta.MMSI || '').trim();
@@ -160,7 +162,7 @@ async function handleMessage(msg) {
     const lon = r.Longitude ?? meta.longitude;
     if (lat == null || lon == null) return;
 
-    await updatePosition(mmsi, {
+    updatePosition(mmsi, {
       lat: Number(lat),
       lon: Number(lon),
       speed: r.Sog != null ? Number(r.Sog) : null,
@@ -171,13 +173,13 @@ async function handleMessage(msg) {
 
     // Update name if provided in metadata
     if (meta.ShipName) {
-      await updateStaticData(mmsi, { name: meta.ShipName.trim() });
+      updateStaticData(mmsi, { name: meta.ShipName.trim() });
     }
   }
 
   if (type === 'ShipStaticData') {
     const s = msg.Message?.ShipStaticData || {};
-    await updateStaticData(mmsi, {
+    updateStaticData(mmsi, {
       name: (s.Name || meta.ShipName || '').trim() || null,
       ship_type: s.Type != null ? Number(s.Type) : null,
       flag: s.Flag || null,

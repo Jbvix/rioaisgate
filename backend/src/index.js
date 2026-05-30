@@ -7,6 +7,7 @@ const api = require('./api');
 const aisstream = require('./aisstream');
 const logger = require('./logger');
 const { setBroadcast } = require('./vesselTracker');
+const { startDbWriteQueue } = require('./db/writeQueue');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -106,5 +107,6 @@ setBroadcast(broadcast);
 // ── Start ─────────────────────────────────────────────────────────
 server.listen(PORT, () => {
   logger.info(`[SERVER] Listening on port ${PORT}`);
+  startDbWriteQueue();
   aisstream.start();
 });

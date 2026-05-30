@@ -1,6 +1,9 @@
 const { isInsideBay } = require('./geofence');
 const db = require('./db');
+const { enqueuePosition, enqueueUpsert } = require('./db/writeQueue');
 const logger = require('./logger');
+
+const persistPositions = process.env.AIS_SAVE_POSITIONS !== 'false';
 
 // In-memory state: mmsi → { lat, lon, insideBay, name, ship_type, speed, heading, course, nav_status, lastSeen }
 const vessels = new Map();
@@ -27,6 +30,27 @@ function broadcast(msg) {
   if (broadcastFn) broadcastFn(msg);
 }
 
+async function recordEventAsync(mmsi, event_type, lat, lon, speed, heading, vessel) {
+  try {
+    const event = await db.recordEvent({ mmsi, event_type, lat, lon, speed, heading });
+    broadcast({
+      type: 'EVENT',
+      event: {
+        ...event,
+        name: vessel.name || 'N/D',
+        ship_type: vessel.ship_type,
+        ship_type_label: shipTypeLabel(vessel.ship_type),
+        flag: vessel.flag,
+      },
+    });
+    logger.info(
+      `[EVENT] ${event_type} | MMSI:${mmsi} | ${vessel.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`,
+    );
+  } catch (err) {
+    logger.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
+  }
+}
+
 /**
  * Ship type codes (ITU/IMO AIS)
  */
@@ -49,17 +73,13 @@ function shipTypeLabel(code) {
   return 'Desconhecido';
 }
 
-async function updateStaticData(mmsi, data) {
+function updateStaticData(mmsi, data) {
   const vessel = vessels.get(mmsi) || {};
   vessels.set(mmsi, { ...vessel, mmsi, ...data, lastSeen: Date.now() });
-  try {
-    await db.upsertVessel({ mmsi, ...data });
-  } catch (err) {
-    logger.error(`[DB] upsertVessel ${mmsi}: ${formatError(err)}`);
-  }
+  enqueueUpsert({ mmsi, ...data });
 }
 
-async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_status }) {
+function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_status }) {
   const prev = vessels.get(mmsi);
   const wasInside = prev ? prev.insideBay : null;
   const nowInside = isInsideBay(lat, lon);
@@ -78,12 +98,8 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
   };
   vessels.set(mmsi, updated);
 
-  // Persist raw position
-  try {
-    await db.savePosition({ mmsi, lat, lon, speed, heading, course, nav_status });
-  } catch (err) {
-    // non-critical, but useful for diagnosing DB connectivity/schema drift in prod
-    logger.error(`[DB] savePosition ${mmsi}: ${formatError(err)}`);
+  if (persistPositions) {
+    enqueuePosition({ mmsi, lat, lon, speed, heading, course, nav_status });
   }
 
   // Crossing detection needs a prior inside/outside state (skip first observation only for EVENT)
@@ -93,23 +109,7 @@ async function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_stat
     if (wasInside && !nowInside) event_type = 'EXIT';
 
     if (event_type) {
-      try {
-        const event = await db.recordEvent({ mmsi, event_type, lat, lon, speed, heading });
-        const payload = {
-          type: 'EVENT',
-          event: {
-            ...event,
-            name: updated.name || 'N/D',
-            ship_type: updated.ship_type,
-            ship_type_label: shipTypeLabel(updated.ship_type),
-            flag: updated.flag,
-          },
-        };
-        broadcast(payload);
-        logger.info(`[EVENT] ${event_type} | MMSI:${mmsi} | ${updated.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`);
-      } catch (err) {
-        logger.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);
-      }
+      void recordEventAsync(mmsi, event_type, lat, lon, speed, heading, updated);
     }
   }
 

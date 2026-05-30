@@ -36,7 +36,7 @@ function buildPoolConfig({ connectionTimeoutMillis = 15000 } = {}) {
     ssl: needsSsl(connectionString) ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis,
     idleTimeoutMillis: 30000,
-    max: 10,
+    max: Number(process.env.PG_POOL_MAX) || 20,
   };
 }
 
