@@ -83,11 +83,18 @@ function persistVesselsToStorage(vessels, lastTouch) {
 }
 
 const initialPersisted = loadPersistedVessels();
-const MIN_SPLASH_MS = 2200;
+/** Duração mínima da splash (ms). */
+const MIN_SPLASH_MS = 15_000;
 const WS_WAIT_MS = 3500;
+const SPLASH_TICK_MS = 150;
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function splashProgressPct(started, cap = 99) {
+  const elapsed = Date.now() - started;
+  return Math.min(cap, Math.round((elapsed / MIN_SPLASH_MS) * cap));
 }
 
 export function useVessels(onGeofenceEvent) {
@@ -138,17 +145,22 @@ export function useVessels(onGeofenceEvent) {
 
   const runBootstrap = useCallback(async () => {
     const started = Date.now();
-    step(5, 'Iniciando RioAISGate…');
-    await delay(180);
+    const tick = (label, floor = 0) => {
+      const p = Math.max(floor, splashProgressPct(started));
+      step(p, label);
+    };
 
-    step(15, 'Conectando ao servidor…');
+    tick('Iniciando RioAISGate…', 2);
+    await delay(400);
+
+    tick('Conectando ao servidor…', 8);
     try {
       await fetch(`${API_URL}/api/health/live`);
     } catch (err) {
       console.warn('[API] health/live:', err.message);
     }
 
-    step(35, 'Carregando embarcações…');
+    tick('Carregando embarcações…', 18);
     try {
       const vRes = await fetch(`${API_URL}/api/vessels`);
       const vs = await vRes.json();
@@ -157,7 +169,7 @@ export function useVessels(onGeofenceEvent) {
       console.error('[API] bootstrap vessels:', err.message);
     }
 
-    step(58, 'Carregando eventos e estatísticas…');
+    tick('Carregando eventos e estatísticas…', 38);
     try {
       const [eRes, sRes] = await Promise.all([
         fetch(`${API_URL}/api/events?limit=50`),
@@ -175,7 +187,7 @@ export function useVessels(onGeofenceEvent) {
       console.error('[API] bootstrap events/stats:', err.message);
     }
 
-    step(72, 'Verificando feed AIS…');
+    tick('Verificando feed AIS…', 55);
     try {
       const r = await fetch(`${API_URL}/api/aisstream/status`);
       setFeedStatus(await r.json());
@@ -183,18 +195,27 @@ export function useVessels(onGeofenceEvent) {
       setFeedStatus({ connected: false, api_unreachable: true });
     }
 
-    step(85, 'Conectando tempo real…');
+    tick('Conectando tempo real…', 68);
     const wsDeadline = Date.now() + WS_WAIT_MS;
     while (!wsConnectedRef.current && Date.now() < wsDeadline) {
+      tick('Conectando tempo real…', 68);
       await delay(120);
     }
 
-    step(96, 'Preparando mapa…');
-    const elapsed = Date.now() - started;
-    if (elapsed < MIN_SPLASH_MS) await delay(MIN_SPLASH_MS - elapsed);
+    const waitLabels = [
+      'Preparando mapa…',
+      'Sincronizando geofence…',
+      'Aguardando sinal AIS…',
+    ];
+    let labelIdx = 0;
+    while (Date.now() - started < MIN_SPLASH_MS) {
+      tick(waitLabels[labelIdx % waitLabels.length], 75);
+      labelIdx += 1;
+      await delay(SPLASH_TICK_MS);
+    }
 
     step(100, 'Abrindo painel…');
-    await delay(280);
+    await delay(450);
     setBootstrap({ done: true, progress: 100, label: 'Pronto' });
   }, [mergeFromApi, step]);
 
