@@ -148,7 +148,7 @@ function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_status }) 
       heading,
       course,
       nav_status,
-      insideBay: nowInside,
+      insideBay,
       name: updated.name || null,
       ship_type: updated.ship_type || null,
       ship_type_label: shipTypeLabel(updated.ship_type),
