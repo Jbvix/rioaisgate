@@ -5,7 +5,19 @@ const logger = require('./logger');
 
 const persistPositions = process.env.AIS_SAVE_POSITIONS !== 'false';
 
-// In-memory state: mmsi → { lat, lon, insideBay, name, ship_type, speed, heading, course, nav_status, lastSeen }
+/** Leituras AIS consecutivas iguais antes de confirmar dentro/fora (evita jitter na boca da barra). */
+const GEOFENCE_CONFIRM_READS = Math.max(2, Number(process.env.GEOFENCE_CONFIRM_READS) || 2);
+
+/** Intervalo mínimo entre eventos ENTRY/EXIT do mesmo MMSI. */
+const GEOFENCE_EVENT_COOLDOWN_MS = Number(process.env.GEOFENCE_EVENT_COOLDOWN_MS) || 120_000;
+
+/** Após restart, ignora cruzamentos por este período (evita rajada falsa). */
+const GEOFENCE_WARMUP_MS = Number(process.env.GEOFENCE_WARMUP_MS) || 120_000;
+
+const serverStartedAt = Date.now();
+const lastGeofenceEventAt = new Map();
+
+// In-memory state: mmsi → { lat, lon, insideBay, insideRaw, insideStreak, ... }
 const vessels = new Map();
 
 // Broadcast callback — set by index.js after WS server is ready
@@ -79,10 +91,19 @@ function updateStaticData(mmsi, data) {
   enqueueUpsert({ mmsi, ...data });
 }
 
+function confirmInsideBay(prev, rawInside) {
+  if (!prev) return { insideBay: rawInside, insideRaw: rawInside, insideStreak: 1 };
+  const streak = prev.insideRaw === rawInside ? (prev.insideStreak || 1) + 1 : 1;
+  const insideBay =
+    streak >= GEOFENCE_CONFIRM_READS ? rawInside : (prev.insideBay ?? rawInside);
+  return { insideBay, insideRaw: rawInside, insideStreak: streak };
+}
+
 function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_status }) {
   const prev = vessels.get(mmsi);
+  const rawInside = isInsideBay(lat, lon);
+  const { insideBay, insideRaw, insideStreak } = confirmInsideBay(prev, rawInside);
   const wasInside = prev ? prev.insideBay : null;
-  const nowInside = isInsideBay(lat, lon);
 
   const updated = {
     ...(prev || {}),
@@ -93,7 +114,9 @@ function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_status }) 
     heading,
     course,
     nav_status,
-    insideBay: nowInside,
+    insideBay,
+    insideRaw,
+    insideStreak,
     lastSeen: Date.now(),
   };
   vessels.set(mmsi, updated);
@@ -102,13 +125,14 @@ function updatePosition(mmsi, { lat, lon, speed, heading, course, nav_status }) 
     enqueuePosition({ mmsi, lat, lon, speed, heading, course, nav_status });
   }
 
-  // Crossing detection needs a prior inside/outside state (skip first observation only for EVENT)
-  if (wasInside !== null) {
-    let event_type = null;
-    if (!wasInside && nowInside) event_type = 'ENTRY';
-    if (wasInside && !nowInside) event_type = 'EXIT';
+  const warmupDone = Date.now() - serverStartedAt >= GEOFENCE_WARMUP_MS;
+  const crossingConfirmed = insideStreak >= GEOFENCE_CONFIRM_READS;
 
-    if (event_type) {
+  if (warmupDone && crossingConfirmed && wasInside !== null && wasInside !== insideBay) {
+    const event_type = !wasInside && insideBay ? 'ENTRY' : 'EXIT';
+    const lastAt = lastGeofenceEventAt.get(mmsi) || 0;
+    if (Date.now() - lastAt >= GEOFENCE_EVENT_COOLDOWN_MS) {
+      lastGeofenceEventAt.set(mmsi, Date.now());
       void recordEventAsync(mmsi, event_type, lat, lon, speed, heading, updated);
     }
   }

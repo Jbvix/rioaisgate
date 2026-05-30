@@ -32,7 +32,19 @@ function handleApiError(res, label, err) {
   res.status(500).json({ error: message });
 }
 
-// Health
+const HEALTH_DB_TIMEOUT_MS = 3000;
+
+// Liveness — responde rápido (Railway healthcheck); não espera Postgres
+router.get('/health/live', (_req, res) => {
+  res.status(200).json({
+    ok: true,
+    aisstream: isConnected(),
+    vessels: getActiveVessels().length,
+    ts: new Date().toISOString(),
+  });
+});
+
+// Health completo — DB com timeout curto para não travar o gateway (502)
 router.get('/health', async (_req, res) => {
   let dbOk = false;
   let dbError = null;
@@ -40,15 +52,24 @@ router.get('/health', async (_req, res) => {
     dbError = 'DATABASE_URL is not configured';
   } else {
     try {
-      await db.ping();
+      await Promise.race([
+        db.ping(),
+        new Promise((_, reject) => {
+          setTimeout(
+            () => reject(new Error(`Database ping timeout (${HEALTH_DB_TIMEOUT_MS}ms)`)),
+            HEALTH_DB_TIMEOUT_MS,
+          );
+        }),
+      ]);
       dbOk = true;
     } catch (err) {
       dbError = formatError(err);
     }
   }
-  res.json({
+  res.status(200).json({
     ok: true,
     aisstream: isConnected(),
+    vessels: getActiveVessels().length,
     db: dbOk,
     dbError,
     ts: new Date().toISOString(),
@@ -56,7 +77,11 @@ router.get('/health', async (_req, res) => {
 });
 
 router.get('/aisstream/status', (_req, res) => {
-  res.json(getStatus());
+  res.json({
+    ...getStatus(),
+    active_vessels: getActiveVessels().length,
+    api_key_set: Boolean(process.env.AISSTREAM_API_KEY),
+  });
 });
 
 router.post('/aisstream/toggle', (req, res) => {

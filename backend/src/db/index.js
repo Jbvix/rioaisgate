@@ -3,7 +3,7 @@ const logger = require('../logger');
 const { buildPoolConfig } = require('./poolConfig');
 
 const QUERY_TIMEOUT_MS = 15000;
-const poolConfig = buildPoolConfig();
+const poolConfig = buildPoolConfig({ statementTimeoutMs: QUERY_TIMEOUT_MS });
 const pool = poolConfig ? new Pool(poolConfig) : null;
 
 function formatDbError(err) {
@@ -48,21 +48,11 @@ if (!pool) {
   logger.error('[DB] DATABASE_URL is not set — events/stats API will return errors');
 } else {
   pool.on('error', (err) => logger.error('DB pool error:', formatDbError(err)));
-  pool.on('connect', (client) => {
-    client.query(`SET statement_timeout = ${QUERY_TIMEOUT_MS}`).catch(() => {});
-  });
 
   (async () => {
     try {
       await query('SELECT 1');
       logger.info('[DB] Connection OK');
-    } catch (err) {
-      logger.error('[DB] Startup connection failed:', formatDbError(err));
-    }
-  })();
-
-  (async () => {
-    try {
       const res = await query(`
         SELECT
           to_regclass('public.vessels') AS vessels,
@@ -77,7 +67,7 @@ if (!pool) {
         logger.info('[DB] Schema check OK.');
       }
     } catch (err) {
-      logger.error('[DB] Schema check failed:', formatDbError(err));
+      logger.error('[DB] Startup check failed:', formatDbError(err));
     }
   })();
 }

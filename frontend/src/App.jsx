@@ -123,30 +123,40 @@ export default function App() {
               title={
                 feedStatus == null
                   ? 'Verificando feed AIS…'
-                  : feedStatus.connected
-                    ? 'Feed AIS conectado (sinal em tempo real)'
-                    : feedStatus.within_window === false
-                      ? `AIS pausado fora da janela (${feedStatus.start_hour}h–${feedStatus.end_hour}h ${feedStatus.timezone || 'America/Sao_Paulo'})`
-                      : 'Dentro da janela, mas sem conexão AIS — reconectando ou falha de credencial/serviço'
+                  : feedStatus.api_unreachable
+                    ? 'Backend indisponível — verifique deploy Railway'
+                    : feedStatus.connected
+                      ? 'Feed AIS conectado (sinal em tempo real)'
+                      : feedStatus.within_window === false
+                        ? `AIS pausado fora da janela (${feedStatus.start_hour}h–${feedStatus.end_hour}h ${feedStatus.timezone || 'America/Sao_Paulo'})`
+                        : feedStatus.api_key_set === false
+                          ? 'AISSTREAM_API_KEY não configurada no servidor'
+                          : 'Dentro da janela, mas sem conexão AIS — reconectando ou falha no stream'
               }
             >
               <div
                 className={`w-2 h-2 rounded-full ${
                   feedStatus == null
                     ? 'bg-white/30'
-                    : feedStatus.connected
-                      ? 'bg-emerald-400 animate-pulse'
-                      : feedStatus.within_window === false
-                        ? 'bg-sky-500/90'
-                        : 'bg-amber-400 animate-pulse'
+                    : feedStatus.api_unreachable
+                      ? 'bg-rose-500'
+                      : feedStatus.connected
+                        ? 'bg-emerald-400 animate-pulse'
+                        : feedStatus.within_window === false
+                          ? 'bg-sky-500/90'
+                          : 'bg-amber-400 animate-pulse'
                 }`}
               />
               <span className="text-xs text-white/60">
-                {feedStatus?.connected
-                  ? 'Live'
-                  : feedStatus?.within_window === false
-                    ? 'Standby'
-                    : 'Sem sinal'}
+                {feedStatus == null
+                  ? 'Verificando…'
+                  : feedStatus.api_unreachable
+                    ? 'API offline'
+                    : feedStatus.connected
+                      ? 'Live'
+                      : feedStatus.within_window === false
+                        ? 'Standby'
+                        : 'Sem sinal'}
               </span>
             </div>
           </div>

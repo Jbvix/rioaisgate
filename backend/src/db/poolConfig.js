@@ -27,7 +27,7 @@ function needsSsl(connectionString) {
   return false;
 }
 
-function buildPoolConfig({ connectionTimeoutMillis = 15000 } = {}) {
+function buildPoolConfig({ connectionTimeoutMillis = 15000, statementTimeoutMs = 15000 } = {}) {
   const connectionString = resolveConnectionString();
   if (!connectionString) return null;
 
@@ -37,6 +37,7 @@ function buildPoolConfig({ connectionTimeoutMillis = 15000 } = {}) {
     connectionTimeoutMillis,
     idleTimeoutMillis: 30000,
     max: Number(process.env.PG_POOL_MAX) || 20,
+    options: `-c statement_timeout=${statementTimeoutMs}`,
   };
 }
 

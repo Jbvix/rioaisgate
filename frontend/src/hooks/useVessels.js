@@ -146,7 +146,7 @@ export function useVessels(onGeofenceEvent) {
     fetch(`${API_URL}/api/aisstream/status`)
       .then((r) => r.json())
       .then(setFeedStatus)
-      .catch(() => setFeedStatus(null));
+      .catch(() => setFeedStatus({ connected: false, api_unreachable: true }));
   }, [mergeFromApi]);
 
   const handleWsMessage = useCallback((msg) => {
@@ -180,7 +180,9 @@ export function useVessels(onGeofenceEvent) {
           if (!cancelled && data && typeof data === 'object') setFeedStatus(data);
         })
         .catch(() => {
-          if (!cancelled) setFeedStatus(null);
+          if (!cancelled) {
+            setFeedStatus({ connected: false, api_unreachable: true });
+          }
         });
 
       fetch(`${API_URL}/api/vessels`)

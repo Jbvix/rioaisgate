@@ -50,16 +50,18 @@ function connect() {
     ws.send(subscribeMessage());
   });
 
-  ws.on('message', async (data) => {
+  ws.on('message', (data) => {
     let msg;
     try {
       msg = JSON.parse(data.toString());
     } catch {
       return;
     }
-    handleMessage(msg).catch((err) => {
+    try {
+      handleMessage(msg);
+    } catch (err) {
       logger.error('[AISSTREAM] handleMessage error:', err.message);
-    });
+    }
   });
 
   ws.on('close', (code) => {
