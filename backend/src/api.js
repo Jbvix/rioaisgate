@@ -33,8 +33,26 @@ function handleApiError(res, label, err) {
 }
 
 // Health
-router.get('/health', (_req, res) => {
-  res.json({ ok: true, aisstream: isConnected(), ts: new Date().toISOString() });
+router.get('/health', async (_req, res) => {
+  let dbOk = false;
+  let dbError = null;
+  if (!db.isConfigured()) {
+    dbError = 'DATABASE_URL is not configured';
+  } else {
+    try {
+      await db.ping();
+      dbOk = true;
+    } catch (err) {
+      dbError = formatError(err);
+    }
+  }
+  res.json({
+    ok: true,
+    aisstream: isConnected(),
+    db: dbOk,
+    dbError,
+    ts: new Date().toISOString(),
+  });
 });
 
 router.get('/aisstream/status', (_req, res) => {

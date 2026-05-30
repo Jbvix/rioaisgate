@@ -1,23 +1,7 @@
 require('dotenv').config();
 const { Pool } = require('pg');
 const logger = require('../logger');
-
-function buildPoolConfig() {
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error('DATABASE_URL is not set');
-  }
-
-  const needsSsl =
-    connectionString.includes('railway') ||
-    process.env.NODE_ENV === 'production';
-
-  return {
-    connectionString,
-    ssl: needsSsl ? { rejectUnauthorized: false } : false,
-    connectionTimeoutMillis: 15000,
-  };
-}
+const { buildPoolConfig, resolveConnectionString, connectionHost, needsSsl } = require('./poolConfig');
 
 function formatDbError(err) {
   if (!err) return 'Unknown error';
@@ -30,7 +14,18 @@ function formatDbError(err) {
   ].filter(Boolean).join(' | ');
 }
 
-const pool = new Pool(buildPoolConfig());
+const connectionString = resolveConnectionString();
+if (!connectionString) {
+  logger.error('Migration failed: set DATABASE_URL or DATABASE_PRIVATE_URL on the backend service.');
+  process.exit(1);
+}
+
+const usingPrivate = Boolean(process.env.DATABASE_PRIVATE_URL?.trim());
+logger.info(
+  `[DB] Migrate target host=${connectionHost(connectionString)} ssl=${needsSsl(connectionString)} source=${usingPrivate ? 'DATABASE_PRIVATE_URL' : 'DATABASE_URL'}`,
+);
+
+const pool = new Pool(buildPoolConfig({ connectionTimeoutMillis: 30000 }));
 
 const sql = `
 CREATE TABLE IF NOT EXISTS vessels (
@@ -82,9 +77,9 @@ $$ LANGUAGE sql;
 
 (async () => {
   const timeout = setTimeout(() => {
-    logger.error('Migration timeout after 30s');
+    logger.error('Migration timeout after 60s');
     process.exit(1);
-  }, 30000);
+  }, 60000);
 
   try {
     await pool.query('SELECT 1');

@@ -133,6 +133,8 @@ export function useVessels(onGeofenceEvent) {
         fetch(`${API_URL}/api/events?limit=50`),
         fetch(`${API_URL}/api/stats/today`),
       ]);
+      if (!eRes.ok) throw new Error(`events HTTP ${eRes.status}`);
+      if (!sRes.ok) throw new Error(`stats/today HTTP ${sRes.status}`);
       const es = await eRes.json();
       const ss = await sRes.json();
       if (Array.isArray(es)) setEvents(es);
