@@ -6,3 +6,5 @@ dist/
 .DS_Store
 .cache/
 backups/rioaisgate-*/
+# Relatórios de pausa de sessão (locais; use docs/REPORT-SESSION-TEMPLATE.md como modelo)
+reports/
