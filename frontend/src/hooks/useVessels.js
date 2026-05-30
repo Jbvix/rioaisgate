@@ -83,14 +83,27 @@ function persistVesselsToStorage(vessels, lastTouch) {
 }
 
 const initialPersisted = loadPersistedVessels();
+const MIN_SPLASH_MS = 2200;
+const WS_WAIT_MS = 3500;
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 export function useVessels(onGeofenceEvent) {
   const [vessels, setVessels] = useState(() => ({ ...initialPersisted.vessels }));
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState(null);
   const [feedStatus, setFeedStatus] = useState(null);
+  const [bootstrap, setBootstrap] = useState({
+    done: false,
+    progress: 0,
+    label: 'Iniciando RioAISGate…',
+  });
 
   const lastTouchRef = useRef({ ...initialPersisted.lastTouch });
+  const wsConnectedRef = useRef(false);
+  const bootstrapOnceRef = useRef(false);
 
   const onGeofenceEventRef = useRef(onGeofenceEvent);
   onGeofenceEventRef.current = onGeofenceEvent;
@@ -119,35 +132,71 @@ export function useVessels(onGeofenceEvent) {
     return merged;
   }, []);
 
-  const fetchInitial = useCallback(async () => {
+  const step = useCallback((progress, label) => {
+    setBootstrap({ done: false, progress, label });
+  }, []);
+
+  const runBootstrap = useCallback(async () => {
+    const started = Date.now();
+    step(5, 'Iniciando RioAISGate…');
+    await delay(180);
+
+    step(15, 'Conectando ao servidor…');
+    try {
+      await fetch(`${API_URL}/api/health/live`);
+    } catch (err) {
+      console.warn('[API] health/live:', err.message);
+    }
+
+    step(35, 'Carregando embarcações…');
     try {
       const vRes = await fetch(`${API_URL}/api/vessels`);
       const vs = await vRes.json();
       setVessels((prev) => mergeFromApi(prev, vs));
     } catch (err) {
-      console.error('[API] fetchInitial vessels:', err.message);
+      console.error('[API] bootstrap vessels:', err.message);
     }
 
+    step(58, 'Carregando eventos e estatísticas…');
     try {
       const [eRes, sRes] = await Promise.all([
         fetch(`${API_URL}/api/events?limit=50`),
         fetch(`${API_URL}/api/stats/today`),
       ]);
-      if (!eRes.ok) throw new Error(`events HTTP ${eRes.status}`);
-      if (!sRes.ok) throw new Error(`stats/today HTTP ${sRes.status}`);
-      const es = await eRes.json();
-      const ss = await sRes.json();
-      if (Array.isArray(es)) setEvents(es);
-      if (ss && typeof ss === 'object' && !Array.isArray(ss)) setStats(ss);
+      if (eRes.ok) {
+        const es = await eRes.json();
+        if (Array.isArray(es)) setEvents(es);
+      }
+      if (sRes.ok) {
+        const ss = await sRes.json();
+        if (ss && typeof ss === 'object' && !Array.isArray(ss)) setStats(ss);
+      }
     } catch (err) {
-      console.error('[API] fetchInitial events/stats:', err.message);
+      console.error('[API] bootstrap events/stats:', err.message);
     }
 
-    fetch(`${API_URL}/api/aisstream/status`)
-      .then((r) => r.json())
-      .then(setFeedStatus)
-      .catch(() => setFeedStatus({ connected: false, api_unreachable: true }));
-  }, [mergeFromApi]);
+    step(72, 'Verificando feed AIS…');
+    try {
+      const r = await fetch(`${API_URL}/api/aisstream/status`);
+      setFeedStatus(await r.json());
+    } catch {
+      setFeedStatus({ connected: false, api_unreachable: true });
+    }
+
+    step(85, 'Conectando tempo real…');
+    const wsDeadline = Date.now() + WS_WAIT_MS;
+    while (!wsConnectedRef.current && Date.now() < wsDeadline) {
+      await delay(120);
+    }
+
+    step(96, 'Preparando mapa…');
+    const elapsed = Date.now() - started;
+    if (elapsed < MIN_SPLASH_MS) await delay(MIN_SPLASH_MS - elapsed);
+
+    step(100, 'Abrindo painel…');
+    await delay(280);
+    setBootstrap({ done: true, progress: 100, label: 'Pronto' });
+  }, [mergeFromApi, step]);
 
   const handleWsMessage = useCallback((msg) => {
     if (msg.type === 'POSITION' && msg.vessel?.mmsi != null) {
@@ -169,7 +218,17 @@ export function useVessels(onGeofenceEvent) {
     }
   }, []);
 
-  useWebSocket(handleWsMessage);
+  useWebSocket(handleWsMessage, {
+    onConnectionChange: (connected) => {
+      wsConnectedRef.current = connected;
+    },
+  });
+
+  useEffect(() => {
+    if (bootstrapOnceRef.current) return;
+    bootstrapOnceRef.current = true;
+    runBootstrap();
+  }, [runBootstrap]);
 
   useEffect(() => {
     let cancelled = false;
@@ -209,5 +268,5 @@ export function useVessels(onGeofenceEvent) {
     return () => clearTimeout(timer);
   }, [vessels]);
 
-  return { vessels, events, stats, feedStatus, fetchInitial };
+  return { vessels, events, stats, feedStatus, bootstrap };
 }

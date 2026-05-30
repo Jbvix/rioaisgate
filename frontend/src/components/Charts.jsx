@@ -6,6 +6,9 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { API_URL } from '../config';
+import { getDailyTrafficLabels } from '../utils/chartLabels';
+
+const DAILY_DAYS = 7;
 
 ChartJS.register(
   CategoryScale, LinearScale, BarElement, LineElement,
@@ -40,17 +43,35 @@ const SHIP_TYPE_LABELS = {
 
 export default function Charts() {
   const [daily, setDaily] = useState([]);
+  const [dailyMeta, setDailyMeta] = useState(null);
   const [hourly, setHourly] = useState([]);
   const [shipTypes, setShipTypes] = useState([]);
   const [tab, setTab] = useState('daily');
 
   useEffect(() => {
-    fetch(`${API_URL}/api/stats/daily?days=7`).then(r => r.json()).then(setDaily).catch(() => {});
+    fetch(`${API_URL}/api/stats/daily?days=${DAILY_DAYS}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (Array.isArray(data)) {
+          const dayKeys = [...new Set(data.map((r) => r.day?.split('T')[0]).filter(Boolean))].sort();
+          setDaily(data);
+          setDailyMeta({
+            daysRequested: DAILY_DAYS,
+            daysWithData: dayKeys.length,
+            dataSince: dayKeys[0] ? `${dayKeys[0]}T12:00:00.000Z` : null,
+          });
+          return;
+        }
+        setDaily(data.rows || []);
+        setDailyMeta(data.meta || null);
+      })
+      .catch(() => {});
     fetch(`${API_URL}/api/stats/hourly`).then(r => r.json()).then(setHourly).catch(() => {});
     fetch(`${API_URL}/api/stats/ship-types`).then(r => r.json()).then(setShipTypes).catch(() => {});
   }, []);
 
   const dailyChart = buildDailyChart(daily);
+  const dailyLabels = getDailyTrafficLabels(dailyMeta, dailyChart?.labels?.length ?? 0);
   const hourlyChart = buildHourlyChart(hourly);
   const typeChart = buildTypeChart(shipTypes);
 
@@ -71,7 +92,28 @@ export default function Charts() {
       </div>
       <div className="flex-1 px-4 pb-4 min-h-0">
         {tab === 'daily' && dailyChart && (
-          <Bar data={dailyChart} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, title: { display: true, text: 'Tráfego últimos 7 dias', color: '#94a3b8' } } }} />
+          <div className="flex flex-col h-full min-h-0 gap-1">
+            {dailyLabels.subtitle && (
+              <p className="text-[11px] text-white/45 text-center shrink-0">{dailyLabels.subtitle}</p>
+            )}
+            <div className="flex-1 min-h-0">
+              <Bar
+                data={dailyChart}
+                options={{
+                  ...CHART_OPTS,
+                  plugins: {
+                    ...CHART_OPTS.plugins,
+                    title: {
+                      display: true,
+                      text: dailyLabels.title,
+                      color: '#94a3b8',
+                      font: { size: 12 },
+                    },
+                  },
+                }}
+              />
+            </div>
+          </div>
         )}
         {tab === 'hourly' && hourlyChart && (
           <Bar data={hourlyChart} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, title: { display: true, text: 'Distribuição por hora (30 dias)', color: '#94a3b8' } } }} />

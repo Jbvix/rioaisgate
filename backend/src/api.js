@@ -128,8 +128,18 @@ router.get('/stats/today', async (_req, res) => {
 router.get('/stats/daily', async (req, res) => {
   try {
     const days = Math.min(Number(req.query.days) || 7, 90);
-    const rows = await db.getDailyStats(days);
-    res.json(rows);
+    const [rows, metaRow] = await Promise.all([
+      db.getDailyStats(days),
+      db.getDailyStatsMeta(days),
+    ]);
+    res.json({
+      rows,
+      meta: {
+        daysRequested: days,
+        daysWithData: Number(metaRow.days_with_data) || 0,
+        dataSince: metaRow.data_since,
+      },
+    });
   } catch (err) {
     handleApiError(res, 'stats/daily', err);
   }

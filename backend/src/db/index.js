@@ -136,6 +136,18 @@ const db = {
     return res.rows;
   },
 
+  async getDailyStatsMeta(days = 7) {
+    const res = await query(
+      `SELECT
+         MIN(occurred_at) AS data_since,
+         COUNT(DISTINCT DATE_TRUNC('day', occurred_at))::int AS days_with_data
+       FROM vessel_events
+       WHERE occurred_at > NOW() - ($1 || ' days')::INTERVAL`,
+      [days],
+    );
+    return res.rows[0] || { data_since: null, days_with_data: 0 };
+  },
+
   async getHourlyStats() {
     const res = await query(
       `SELECT

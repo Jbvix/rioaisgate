@@ -1,10 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import Map from './components/Map';
 import Dashboard from './components/Dashboard';
 import EventLog from './components/EventLog';
 import VesselList from './components/VesselList';
 import VesselDetail from './components/VesselDetail';
 import Charts from './components/Charts';
+import SplashScreen from './components/SplashScreen';
+import UserManual from './components/UserManual';
 import { useVessels } from './hooks/useVessels';
 import { GUANABARA_BAY_POLYGON } from './constants/geofence';
 import { playGeofenceAlert } from './utils/playGeofenceAlert';
@@ -52,22 +54,15 @@ function loadSavedPolygon() {
   }
 }
 
-export default function App() {
-  const [geofenceWatch, setGeofenceWatch] = useState(loadGeofenceWatch);
-  const watchRef = useRef(geofenceWatch);
-  watchRef.current = geofenceWatch;
-
-  const onGeofenceEvent = useCallback((event) => {
-    const id = String(event?.mmsi ?? '');
-    const rule = watchRef.current[id];
-    if (!rule || !event?.event_type) return;
-    const t = event.event_type;
-    if (rule === 'BOTH' || rule === t) {
-      playGeofenceAlert(t === 'ENTRY' ? 'entry' : 'exit');
-    }
-  }, []);
-
-  const { vessels, events, stats, feedStatus, fetchInitial } = useVessels(onGeofenceEvent);
+function MainApp({
+  vessels,
+  events,
+  stats,
+  feedStatus,
+  geofenceWatch,
+  updateGeofenceWatch,
+  toggleGeofenceWatch,
+}) {
   const [selectedMmsi, setSelectedMmsi] = useState(null);
   const [sideTab, setSideTab] = useState('Eventos');
   const [geofencePolygon] = useState(loadSavedPolygon);
@@ -75,38 +70,8 @@ export default function App() {
   const [showSeaMarks, setShowSeaMarks] = useState(true);
   const [mapMenuOpen, setMapMenuOpen] = useState(false);
 
-  useEffect(() => { fetchInitial(); }, [fetchInitial]);
-
-  const updateGeofenceWatch = useCallback((updater) => {
-    setGeofenceWatch((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      saveGeofenceWatch(next);
-      return next;
-    });
-  }, []);
-
-  const toggleGeofenceWatch = useCallback(
-    (mmsi, enabled) => {
-      const id = String(mmsi);
-      if (!enabled) {
-        updateGeofenceWatch((prev) => {
-          const next = { ...prev };
-          delete next[id];
-          return next;
-        });
-        return;
-      }
-      const v = vessels[id];
-      let rule = 'BOTH';
-      if (v?.insideBay === true) rule = 'EXIT';
-      else if (v?.insideBay === false) rule = 'ENTRY';
-      updateGeofenceWatch((prev) => ({ ...prev, [id]: rule }));
-    },
-    [vessels, updateGeofenceWatch],
-  );
-
   return (
-    <div className="flex h-screen bg-navy-900 overflow-hidden">
+    <div className="flex h-screen bg-navy-900 overflow-hidden animate-[fadeIn_0.4s_ease-out]">
       {/* ── Sidebar ─────────────────────────────────────── */}
       <aside className="w-80 flex-shrink-0 flex flex-col bg-navy-800 border-r border-navy-700 overflow-hidden">
         {/* Header */}
@@ -262,5 +227,78 @@ export default function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function App() {
+  const [manualOpen, setManualOpen] = useState(false);
+  const [geofenceWatch, setGeofenceWatch] = useState(loadGeofenceWatch);
+  const watchRef = useRef(geofenceWatch);
+  watchRef.current = geofenceWatch;
+
+  const onGeofenceEvent = useCallback((event) => {
+    const id = String(event?.mmsi ?? '');
+    const rule = watchRef.current[id];
+    if (!rule || !event?.event_type) return;
+    const t = event.event_type;
+    if (rule === 'BOTH' || rule === t) {
+      playGeofenceAlert(t === 'ENTRY' ? 'entry' : 'exit');
+    }
+  }, []);
+
+  const { vessels, events, stats, feedStatus, bootstrap } = useVessels(onGeofenceEvent);
+
+  const updateGeofenceWatch = useCallback((updater) => {
+    setGeofenceWatch((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      saveGeofenceWatch(next);
+      return next;
+    });
+  }, []);
+
+  const toggleGeofenceWatch = useCallback(
+    (mmsi, enabled) => {
+      const id = String(mmsi);
+      if (!enabled) {
+        updateGeofenceWatch((prev) => {
+          const next = { ...prev };
+          delete next[id];
+          return next;
+        });
+        return;
+      }
+      const v = vessels[id];
+      let rule = 'BOTH';
+      if (v?.insideBay === true) rule = 'EXIT';
+      else if (v?.insideBay === false) rule = 'ENTRY';
+      updateGeofenceWatch((prev) => ({ ...prev, [id]: rule }));
+    },
+    [vessels, updateGeofenceWatch],
+  );
+
+  if (manualOpen) {
+    return <UserManual onClose={() => setManualOpen(false)} />;
+  }
+
+  if (!bootstrap.done) {
+    return (
+      <SplashScreen
+        progress={bootstrap.progress}
+        label={bootstrap.label}
+        onOpenManual={() => setManualOpen(true)}
+      />
+    );
+  }
+
+  return (
+    <MainApp
+      vessels={vessels}
+      events={events}
+      stats={stats}
+      feedStatus={feedStatus}
+      geofenceWatch={geofenceWatch}
+      updateGeofenceWatch={updateGeofenceWatch}
+      toggleGeofenceWatch={toggleGeofenceWatch}
+    />
   );
 }
