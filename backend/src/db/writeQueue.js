@@ -4,8 +4,14 @@ const logger = require('../logger');
 const POSITION_FLUSH_MS = Number(process.env.AIS_POSITION_FLUSH_MS) || 30_000;
 const POSITION_BATCH_MAX = Number(process.env.AIS_POSITION_BATCH_MAX) || 40;
 const UPSERT_FLUSH_MS = Number(process.env.AIS_UPSERT_FLUSH_MS) || 5_000;
+/** Mínimo entre gravações de posição no DB por MMSI (mapa ao vivo não usa isso). */
+const POSITION_PERSIST_MS =
+  Number(process.env.AIS_POSITION_PERSIST_MINUTES) > 0
+    ? Number(process.env.AIS_POSITION_PERSIST_MINUTES) * 60_000
+    : Number(process.env.AIS_POSITION_PERSIST_MS) || 5 * 60_000;
 
 const positionQueue = [];
+const lastPersistByMmsi = new Map();
 const upsertByMmsi = new Map();
 let positionTimer = null;
 let upsertTimer = null;
@@ -24,6 +30,13 @@ function formatError(err) {
 }
 
 function enqueuePosition(row) {
+  const mmsi = row?.mmsi;
+  if (!mmsi) return;
+  const now = Date.now();
+  const last = lastPersistByMmsi.get(mmsi) || 0;
+  if (now - last < POSITION_PERSIST_MS) return;
+  lastPersistByMmsi.set(mmsi, now);
+
   positionQueue.push(row);
   if (positionQueue.length > POSITION_BATCH_MAX * 3) {
     positionQueue.splice(0, POSITION_BATCH_MAX);
@@ -44,7 +57,10 @@ async function flushPositions() {
   positionTimer = null;
   if (flushingPositions || positionQueue.length === 0) return;
   flushingPositions = true;
-  const batch = positionQueue.splice(0, POSITION_BATCH_MAX);
+  const raw = positionQueue.splice(0, POSITION_BATCH_MAX);
+  const deduped = new Map();
+  for (const row of raw) deduped.set(row.mmsi, row);
+  const batch = [...deduped.values()];
   try {
     for (const row of batch) {
       await db.savePosition(row);
@@ -82,7 +98,7 @@ async function flushUpserts() {
 function startDbWriteQueue() {
   const persistPositions = process.env.AIS_SAVE_POSITIONS !== 'false';
   logger.info(
-    `[DB] Write queue active — positions: ${persistPositions ? `every ${POSITION_FLUSH_MS}ms` : 'disabled'}, upserts every ${UPSERT_FLUSH_MS}ms`,
+    `[DB] Write queue active — positions: ${persistPositions ? `flush ${POSITION_FLUSH_MS}ms, 1 grav./${Math.round(POSITION_PERSIST_MS / 60000)}min/MMSI` : 'disabled'}, upserts every ${UPSERT_FLUSH_MS}ms`,
   );
 }
 

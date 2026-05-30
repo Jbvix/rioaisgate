@@ -5,8 +5,8 @@
 | O quê | Onde | Por quanto tempo |
 |-------|------|------------------|
 | Mapa ao vivo | Memória do backend | ~30 minutos |
-| Eventos / estatísticas no app | Postgres `vessel_events` | **30 dias** (automático) |
-| Posições AIS brutas | Postgres `vessel_positions` | **24 horas** (automático) |
+| Eventos / estatísticas no app | Postgres `vessel_events` | **7 dias** (automático) |
+| Posições AIS brutas | Postgres `vessel_positions` | **24 h** (1 gravação / 5 min por navio; mapa ao vivo não depende disso) |
 | **Arquivo para guardar** | Pasta `backups/` no seu PC | **Você define** (OneDrive, etc.) |
 
 Histórico longo = **backup mensal** em arquivo, não deixar tudo no banco.
@@ -104,6 +104,25 @@ node src/db/backup.js --out=../backups/backup-2026-05
 Coloque um lembrete no calendário: *“Backup RioAISGate”*.
 
 ---
+
+## Reduzir `vessel_positions` no Railway (muitas páginas)
+
+É a **mesma** base Postgres, tabela `vessel_positions` (trilhas AIS). Muitas páginas no painel = muitas linhas (~10 por página).
+
+Limpeza imediata no **Postgres → Data → Query**:
+
+```sql
+-- Ver volume
+SELECT COUNT(*) FROM vessel_positions;
+
+-- Apagar trilhas com mais de 24 h (retenção padrão)
+DELETE FROM vessel_positions WHERE recorded_at < NOW() - INTERVAL '24 hours';
+
+-- Opcional: apagar pico antigo (ajuste o horário UTC do pico)
+-- DELETE FROM vessel_positions WHERE recorded_at < '2026-05-30 02:00:00+00';
+```
+
+Depois do deploy com `AIS_POSITION_PERSIST_MINUTES=5`, o crescimento fica bem menor.
 
 ## Problemas comuns
 

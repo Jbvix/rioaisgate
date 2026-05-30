@@ -8,10 +8,10 @@ const EVENT_RETENTION_DAYS = Math.max(1, Number(process.env.EVENT_RETENTION_DAYS
 /** Trilhas brutas em vessel_positions (horas). */
 const POSITION_RETENTION_HOURS = Math.max(1, Number(process.env.POSITION_RETENTION_HOURS) || 24);
 
-/** Intervalo entre limpezas automáticas (ms). Padrão: 24 h. */
+/** Intervalo entre limpezas automáticas (ms). Padrão: 6 h (posições crescem rápido). */
 const RETENTION_INTERVAL_MS = Math.max(
   60 * 60 * 1000,
-  Number(process.env.RETENTION_INTERVAL_MS) || 24 * 60 * 60 * 1000,
+  Number(process.env.RETENTION_INTERVAL_MS) || 6 * 60 * 60 * 1000,
 );
 
 function formatError(err) {
