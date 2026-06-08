@@ -8,6 +8,12 @@ html, body, #root {
   padding: 0;
 }
 
+@supports (height: 100dvh) {
+  html, body, #root {
+    height: 100dvh;
+  }
+}
+
 /* Leaflet icon fix for Vite */
 .leaflet-default-icon-path {
   background-image: url("https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png");
@@ -28,6 +34,17 @@ html, body, #root {
   font-size: 18px;
   filter: drop-shadow(0 0 3px rgba(0,0,0,0.8));
   transition: transform 0.3s ease;
+}
+
+/* Leaflet: evita sobreposição com botões no mobile */
+@media (max-width: 1023px) {
+  .leaflet-top.leaflet-right {
+    top: 0.5rem;
+    right: 0.5rem;
+  }
+  .leaflet-bottom.leaflet-right {
+    margin-bottom: 0.25rem;
+  }
 }
 
 /* Scrollbar for dark panels */

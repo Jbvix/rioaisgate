@@ -30,10 +30,10 @@ export default function VesselDetail({
   const watching = geofenceWatchRule != null && geofenceWatchRule !== '';
 
   return (
-    <div className="bg-navy-800 rounded-xl p-4 flex flex-col gap-3 shadow-xl border border-navy-600">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-white font-bold text-lg leading-tight">
+    <div className="bg-navy-800 rounded-xl p-3 sm:p-4 flex flex-col gap-2 sm:gap-3 shadow-xl border border-navy-600">
+      <div className="flex items-start justify-between gap-2 min-w-0">
+        <div className="min-w-0">
+          <div className="text-white font-bold text-base sm:text-lg leading-tight truncate">
             {vessel?.name || 'Embarcação desconhecida'}
           </div>
           <div className="text-white/50 text-xs mt-0.5">MMSI: {mmsi}</div>

@@ -8,10 +8,10 @@ function KPI({ label, value, sub, color = 'ocean' }) {
     rose:   'from-rose-700 to-rose-500',
   };
   return (
-    <div className={`bg-gradient-to-br ${colors[color]} rounded-xl p-4 flex flex-col gap-1 shadow-lg`}>
-      <span className="text-xs text-white/70 uppercase tracking-widest">{label}</span>
-      <span className="text-3xl font-bold text-white">{value ?? '—'}</span>
-      {sub && <span className="text-xs text-white/60">{sub}</span>}
+    <div className={`bg-gradient-to-br ${colors[color]} rounded-lg sm:rounded-xl p-2.5 sm:p-4 flex flex-col gap-0.5 sm:gap-1 shadow-lg min-w-0`}>
+      <span className="text-[10px] sm:text-xs text-white/70 uppercase tracking-wide sm:tracking-widest leading-tight">{label}</span>
+      <span className="text-xl sm:text-3xl font-bold text-white tabular-nums">{value ?? '—'}</span>
+      {sub && <span className="text-[10px] sm:text-xs text-white/60 leading-tight">{sub}</span>}
     </div>
   );
 }
@@ -21,7 +21,7 @@ export default function Dashboard({ stats, vessels }) {
   const inside = vesselList.filter(v => v.insideBay).length;
 
   return (
-    <div className="grid grid-cols-2 gap-3 p-4">
+    <div className="grid grid-cols-2 gap-2 sm:gap-3 p-2 sm:p-4">
       <KPI
         label="Embarcações ativas"
         value={vesselList.length}

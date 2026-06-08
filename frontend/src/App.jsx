@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { readMapDeepLinkFromUrl } from './utils/mapDeepLink';
 import Map from './components/Map';
 import Dashboard from './components/Dashboard';
@@ -10,11 +10,30 @@ import SplashScreen from './components/SplashScreen';
 import UserManual from './components/UserManual';
 import { useVessels } from './hooks/useVessels';
 import { GUANABARA_BAY_POLYGON } from './constants/geofence';
-import { playGeofenceAlert } from './utils/playGeofenceAlert';
+import { playGeofenceAlert, unlockGeofenceAudio } from './utils/playGeofenceAlert';
 
 const TABS = ['Mapa', 'Eventos', 'Embarcações', 'Gráficos'];
 const GEOFENCE_STORAGE_KEY = 'rioaisgate.geofence.polygon.v1';
 const GEOFENCE_WATCH_STORAGE_KEY = 'rioaisgate.geofence.watch.v1';
+const BAR_SOUND_STORAGE_KEY = 'rioaisgate.bar.sound.v1';
+
+function loadBarSoundEnabled() {
+  try {
+    const raw = localStorage.getItem(BAR_SOUND_STORAGE_KEY);
+    if (raw === 'false') return false;
+    return true;
+  } catch {
+    return true;
+  }
+}
+
+function saveBarSoundEnabled(enabled) {
+  try {
+    localStorage.setItem(BAR_SOUND_STORAGE_KEY, enabled ? 'true' : 'false');
+  } catch {
+    /* ignore */
+  }
+}
 
 function loadGeofenceWatch() {
   try {
@@ -63,6 +82,8 @@ function MainApp({
   geofenceWatch,
   updateGeofenceWatch,
   toggleGeofenceWatch,
+  barSoundEnabled,
+  onToggleBarSound,
 }) {
   const [deepLink] = useState(() => readMapDeepLinkFromUrl());
   const [selectedMmsi, setSelectedMmsi] = useState(deepLink.mmsi);
@@ -71,22 +92,59 @@ function MainApp({
   const [baseLayer, setBaseLayer] = useState('osm');
   const [showSeaMarks, setShowSeaMarks] = useState(true);
   const [mapMenuOpen, setMapMenuOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+
+  const openPanel = useCallback(() => setPanelOpen(true), []);
+  const closePanel = useCallback(() => setPanelOpen(false), []);
+
+  const handleSelectVessel = useCallback((mmsi) => {
+    setSelectedMmsi(mmsi);
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      setPanelOpen(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (deepLink.mmsi && typeof window !== 'undefined' && window.matchMedia('(max-width: 1023px)').matches) {
+      setPanelOpen(true);
+    }
+  }, [deepLink.mmsi]);
 
   return (
-    <div className="flex h-screen bg-navy-900 overflow-hidden animate-[fadeIn_0.4s_ease-out]">
-      {/* ── Sidebar ─────────────────────────────────────── */}
-      <aside className="w-80 flex-shrink-0 flex flex-col bg-navy-800 border-r border-navy-700 overflow-hidden">
+    <div className="flex h-screen max-h-[100dvh] bg-navy-900 overflow-hidden animate-[fadeIn_0.4s_ease-out] lg:flex-row">
+      {/* Overlay mobile */}
+      {panelOpen && (
+        <button
+          type="button"
+          aria-label="Fechar painel"
+          className="fixed inset-0 z-[1990] bg-black/55 lg:hidden"
+          onClick={closePanel}
+        />
+      )}
+
+      {/* ── Sidebar (drawer no mobile) ─────────────────── */}
+      <aside
+        className={[
+          'fixed inset-y-0 left-0 z-[2000] flex w-[min(100%,20rem)] max-w-full flex-col',
+          'bg-navy-800 border-r border-navy-700 shadow-2xl',
+          'transition-transform duration-300 ease-out lg:transition-none',
+          'lg:static lg:z-auto lg:w-80 lg:flex-shrink-0 lg:shadow-none',
+          panelOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        ].join(' ')}
+      >
         {/* Header */}
-        <div className="px-4 py-3 border-b border-navy-700">
+        <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-navy-700 shrink-0">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">⚓</span>
-            <div>
+            <span className="text-xl sm:text-2xl">⚓</span>
+            <div className="min-w-0 flex-1">
               <div className="text-white font-bold text-sm leading-tight">RioAISGate</div>
               <div className="text-white/40 text-xs">Barra da Guanabara</div>
-              <div className="text-white/30 text-[10px] mt-0.5">Jossian Brito · TugLife Systems</div>
+              <div className="text-white/30 text-[10px] mt-0.5 hidden sm:block truncate">
+                Jossian Brito · TugLife Systems
+              </div>
             </div>
             <div
-              className="ml-auto flex items-center gap-1.5"
+              className="flex items-center gap-1.5 shrink-0"
               title={
                 feedStatus == null
                   ? 'Verificando feed AIS…'
@@ -114,7 +172,7 @@ function MainApp({
                           : 'bg-amber-400 animate-pulse'
                 }`}
               />
-              <span className="text-xs text-white/60">
+              <span className="text-[10px] sm:text-xs text-white/60 hidden min-[380px]:inline">
                 {feedStatus == null
                   ? 'Verificando…'
                   : feedStatus.api_unreachable
@@ -126,60 +184,105 @@ function MainApp({
                         : 'Sem sinal'}
               </span>
             </div>
-          </div>
-        </div>
-
-        {/* KPIs */}
-        <Dashboard stats={stats} vessels={vessels} />
-
-        {/* Vessel detail */}
-        {selectedMmsi && (
-          <div className="px-3 pb-3">
-            <VesselDetail
-              mmsi={selectedMmsi}
-              vessels={vessels}
-              onClose={() => setSelectedMmsi(null)}
-              geofenceWatchRule={geofenceWatch[String(selectedMmsi)]}
-              onToggleGeofenceWatch={(enabled) => toggleGeofenceWatch(selectedMmsi, enabled)}
-            />
-          </div>
-        )}
-
-        {/* Tabs */}
-        <div className="flex border-b border-navy-700 px-3">
-          {TABS.filter(t => t !== 'Mapa').map(t => (
             <button
-              key={t}
-              onClick={() => setSideTab(t)}
-              className={`flex-1 py-2 text-xs font-medium transition-colors ${
-                sideTab === t
-                  ? 'text-ocean-400 border-b-2 border-ocean-400'
-                  : 'text-white/40 hover:text-white/70'
-              }`}
+              type="button"
+              onClick={closePanel}
+              className="lg:hidden shrink-0 rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-navy-700"
+              aria-label="Fechar painel"
             >
-              {t}
+              ✕
             </button>
-          ))}
+          </div>
         </div>
 
-        {/* Tab content */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          {sideTab === 'Eventos' && (
-            <EventLog events={events} onSelectVessel={setSelectedMmsi} />
-          )}
-          {sideTab === 'Embarcações' && (
-            <VesselList vessels={vessels} onSelect={setSelectedMmsi} selectedMmsi={selectedMmsi} />
-          )}
-          {sideTab === 'Gráficos' && <Charts />}
+        <div className="px-2 sm:px-3 py-2 border-b border-navy-700/80 shrink-0">
+          <button
+            type="button"
+            onClick={onToggleBarSound}
+            className={`w-full flex items-center justify-between gap-2 rounded-lg px-2.5 sm:px-3 py-2 text-[11px] sm:text-xs font-medium transition-colors ${
+              barSoundEnabled
+                ? 'bg-ocean-500/15 text-ocean-300 border border-ocean-500/35 hover:bg-ocean-500/25'
+                : 'bg-navy-700/60 text-white/45 border border-navy-600 hover:bg-navy-700'
+            }`}
+            title={
+              barSoundEnabled
+                ? 'Som ativo: toca em toda entrada e saída na barra'
+                : 'Som desligado — clique para ativar alertas da barra'
+            }
+          >
+            <span className="text-left leading-snug">
+              <span className="sm:hidden">{barSoundEnabled ? '🔔 Som na barra' : '🔕 Som off'}</span>
+              <span className="hidden sm:inline">
+                {barSoundEnabled ? '🔔 Som na barra (entrada e saída)' : '🔕 Som na barra desligado'}
+              </span>
+            </span>
+            <span className={`text-[10px] uppercase tracking-wide shrink-0 ${barSoundEnabled ? 'text-emerald-400/90' : 'text-white/30'}`}>
+              {barSoundEnabled ? 'On' : 'Off'}
+            </span>
+          </button>
+        </div>
+
+        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
+          <div className="shrink-0 overflow-y-auto dark-scroll max-h-[38vh] lg:max-h-none">
+            <Dashboard stats={stats} vessels={vessels} />
+
+            {selectedMmsi && (
+              <div className="px-2 sm:px-3 pb-2 sm:pb-3">
+                <VesselDetail
+                  mmsi={selectedMmsi}
+                  vessels={vessels}
+                  onClose={() => setSelectedMmsi(null)}
+                  geofenceWatchRule={geofenceWatch[String(selectedMmsi)]}
+                  onToggleGeofenceWatch={(enabled) => toggleGeofenceWatch(selectedMmsi, enabled)}
+                />
+              </div>
+            )}
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-navy-700 px-2 sm:px-3 shrink-0">
+            {TABS.filter((t) => t !== 'Mapa').map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setSideTab(t)}
+                className={`flex-1 py-2 text-[10px] sm:text-xs font-medium transition-colors ${
+                  sideTab === t
+                    ? 'text-ocean-400 border-b-2 border-ocean-400'
+                    : 'text-white/40 hover:text-white/70'
+                }`}
+              >
+                {t === 'Embarcações' ? (
+                  <>
+                    <span className="sm:hidden">Navios</span>
+                    <span className="hidden sm:inline">Embarcações</span>
+                  </>
+                ) : (
+                  t
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          <div className="flex-1 min-h-0 overflow-hidden">
+            {sideTab === 'Eventos' && (
+              <EventLog events={events} onSelectVessel={handleSelectVessel} />
+            )}
+            {sideTab === 'Embarcações' && (
+              <VesselList vessels={vessels} onSelect={handleSelectVessel} selectedMmsi={selectedMmsi} />
+            )}
+            {sideTab === 'Gráficos' && <Charts />}
+          </div>
         </div>
       </aside>
 
       {/* ── Map ─────────────────────────────────────────── */}
-      <main className="flex-1 relative">
+      <main className="relative flex-1 min-w-0 min-h-0">
         <Map
           vessels={vessels}
           selectedMmsi={selectedMmsi}
-          onSelectVessel={setSelectedMmsi}
+          onSelectVessel={handleSelectVessel}
           geofencePolygon={geofencePolygon}
           baseLayer={baseLayer}
           showSeaMarks={showSeaMarks}
@@ -187,17 +290,19 @@ function MainApp({
           deepLinkLon={deepLink.lon}
         />
 
-        <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2">
+        <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 sm:top-4 sm:right-4">
           <button
-            className="rounded-lg border border-navy-600 bg-navy-800/90 px-3 py-2 text-sm text-white shadow-lg backdrop-blur hover:bg-navy-700"
+            type="button"
+            className="rounded-lg border border-navy-600 bg-navy-800/90 px-2.5 py-2 sm:px-3 text-sm text-white shadow-lg backdrop-blur hover:bg-navy-700"
             onClick={() => setMapMenuOpen((v) => !v)}
             title="Menu do mapa"
+            aria-label="Camadas do mapa"
           >
             ☰
           </button>
 
           {mapMenuOpen && (
-            <div className="w-64 rounded-lg border border-navy-600 bg-navy-800/95 p-3 text-xs text-white shadow-lg backdrop-blur">
+            <div className="w-[min(calc(100vw-1.5rem),16rem)] rounded-lg border border-navy-600 bg-navy-800/95 p-3 text-xs text-white shadow-lg backdrop-blur">
               <div className="mb-2 font-semibold text-white/90">Camadas do mapa</div>
               <label className="mb-1 block text-white/70">Base</label>
               <select
@@ -224,10 +329,23 @@ function MainApp({
           )}
         </div>
 
-        {/* Floating vessel count badge */}
-        <div className="absolute bottom-4 right-4 bg-navy-800/90 backdrop-blur rounded-xl px-4 py-2 shadow-xl border border-navy-600 pointer-events-none">
-          <div className="text-xs text-white/50 uppercase tracking-widest">Embarcações visíveis</div>
-          <div className="text-2xl font-bold text-white text-center">{Object.keys(vessels).length}</div>
+        <div className="absolute bottom-3 left-3 z-[1000] flex flex-col items-start gap-2 sm:bottom-4 sm:left-auto sm:right-4 sm:items-end">
+          <button
+            type="button"
+            onClick={openPanel}
+            className="flex items-center gap-1.5 rounded-lg border border-navy-600 bg-navy-800/95 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur hover:bg-navy-700 lg:hidden"
+            aria-label="Abrir painel"
+          >
+            <span aria-hidden>☰</span>
+            <span>Painel</span>
+          </button>
+          <div className="bg-navy-800/90 backdrop-blur rounded-lg sm:rounded-xl px-3 py-1.5 sm:px-4 sm:py-2 shadow-xl border border-navy-600 pointer-events-none max-w-[9rem] sm:max-w-none">
+            <div className="text-[10px] sm:text-xs text-white/50 uppercase tracking-wide sm:tracking-widest leading-tight">
+              <span className="sm:hidden">Navios</span>
+              <span className="hidden sm:inline">Embarcações visíveis</span>
+            </div>
+            <div className="text-xl sm:text-2xl font-bold text-white tabular-nums">{Object.keys(vessels).length}</div>
+          </div>
         </div>
       </main>
     </div>
@@ -237,20 +355,51 @@ function MainApp({
 export default function App() {
   const [manualOpen, setManualOpen] = useState(false);
   const [geofenceWatch, setGeofenceWatch] = useState(loadGeofenceWatch);
+  const [barSoundEnabled, setBarSoundEnabled] = useState(loadBarSoundEnabled);
   const watchRef = useRef(geofenceWatch);
+  const barSoundRef = useRef(barSoundEnabled);
   watchRef.current = geofenceWatch;
+  barSoundRef.current = barSoundEnabled;
 
   const onGeofenceEvent = useCallback((event) => {
+    const t = event?.event_type;
+    if (t !== 'ENTRY' && t !== 'EXIT') return;
+
     const id = String(event?.mmsi ?? '');
     const rule = watchRef.current[id];
-    if (!rule || !event?.event_type) return;
-    const t = event.event_type;
-    if (rule === 'BOTH' || rule === t) {
+    const fromWatch = rule && (rule === 'BOTH' || rule === t);
+    const fromBar = barSoundRef.current;
+
+    if (fromBar || fromWatch) {
       playGeofenceAlert(t === 'ENTRY' ? 'entry' : 'exit');
     }
   }, []);
 
+  const onToggleBarSound = useCallback(() => {
+    setBarSoundEnabled((prev) => {
+      const next = !prev;
+      saveBarSoundEnabled(next);
+      if (next) {
+        void unlockGeofenceAudio().then(() => playGeofenceAlert('entry'));
+      }
+      return next;
+    });
+  }, []);
+
   const { vessels, events, stats, feedStatus, bootstrap } = useVessels(onGeofenceEvent);
+
+  useEffect(() => {
+    if (!bootstrap.done || !barSoundEnabled) return;
+    const unlock = () => {
+      void unlockGeofenceAudio();
+    };
+    document.addEventListener('click', unlock, { once: true });
+    document.addEventListener('keydown', unlock, { once: true });
+    return () => {
+      document.removeEventListener('click', unlock);
+      document.removeEventListener('keydown', unlock);
+    };
+  }, [bootstrap.done, barSoundEnabled]);
 
   const updateGeofenceWatch = useCallback((updater) => {
     setGeofenceWatch((prev) => {
@@ -271,6 +420,7 @@ export default function App() {
         });
         return;
       }
+      void unlockGeofenceAudio();
       const v = vessels[id];
       let rule = 'BOTH';
       if (v?.insideBay === true) rule = 'EXIT';
@@ -303,6 +453,8 @@ export default function App() {
       geofenceWatch={geofenceWatch}
       updateGeofenceWatch={updateGeofenceWatch}
       toggleGeofenceWatch={toggleGeofenceWatch}
+      barSoundEnabled={barSoundEnabled}
+      onToggleBarSound={onToggleBarSound}
     />
   );
 }

@@ -35,6 +35,41 @@ AISSTREAM.IO (WebSocket)
 
 A zona de monitoramento cobre o canal de acesso à Baía de Guanabara entre o Forte São João (RJ) e o Forte Santa Cruz (Niterói), com um buffer de aproximação oceânica.
 
+## Telegram — Grupo AISGATE
+
+| Recurso | Link |
+|---|---|
+| Painel web | [riogateais.netlify.app](https://riogateais.netlify.app) |
+| Grupo AISGATE (convite privado) | [t.me/+BJ9lJFeVqR00NmEx](https://t.me/+BJ9lJFeVqR00NmEx) |
+| Bot | [@AISgateBot](https://t.me/AISgateBot) |
+
+Grupo privado de alertas operacionais: notificações automáticas quando embarcações cruzam a geofence (**ENTRY** / **EXIT**), com deep link para o mapa.
+
+**Descrição sugerida do grupo (campo Descrição no Telegram):**
+
+```
+Alertas automáticos ENTRY/EXIT na Barra da Guanabara — RioAISGate.
+Dados AIS em tempo real · Bot @AISgateBot · Mapa: riogateais.netlify.app
+TugLife Systems
+```
+
+**Mensagem fixada sugerida:**
+
+```
+⚓ Bem-vindo ao AISGATE
+
+Aqui chegam os alertas automáticos do RioAISGate quando navios cruzam a Barra da Guanabara (ENTRY / EXIT).
+
+🗺 Painel: https://riogateais.netlify.app
+🤖 Bot: @AISgateBot
+   /watch 710123456 both — vigia um navio
+   /list · /status · /mute · /unmute
+
+Grupo privado · uso operacional · TugLife Systems
+```
+
+Comandos do bot: `/start`, `/watch`, `/unwatch`, `/list`, `/status`, `/mute`, `/unmute`. Detalhes em `docs/TELEGRAM-BOT-SPRINTS.md` e no manual do usuário (splash → **Manual do usuário**).
+
 ## Configuração
 
 ### Backend
@@ -70,6 +105,12 @@ AIS_FEED_TIMEZONE=America/Sao_Paulo
 AIS_FEED_START_HOUR=0
 AIS_FEED_END_HOUR=0
 LOG_LEVEL=info
+# Telegram (alertas ENTRY/EXIT)
+TELEGRAM_ALERTS_ENABLED=true
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_BOT_POLLING=true
+TELEGRAM_BROADCAST=true
+TELEGRAM_CHAT_IDS=
 ```
 
 No **Railway**, use os mesmos nomes no painel **Variables**. Se o projeto já tinha `AIS_FEED_START_HOUR=8` e `AIS_FEED_END_HOUR=18`, atualize ambos para **`0`** (horários iguais = AIS 24h) ou remova essas duas variáveis para aplicar o novo padrão do código após o deploy.
