@@ -57,10 +57,15 @@ if (!pool) {
         SELECT
           to_regclass('public.vessels') AS vessels,
           to_regclass('public.vessel_events') AS vessel_events,
-          to_regclass('public.vessel_positions') AS vessel_positions
+          to_regclass('public.vessel_positions') AS vessel_positions,
+          to_regclass('public.telegram_subscriptions') AS telegram_subscriptions
       `);
       const row = res.rows[0] || {};
-      const missing = ['vessels', 'vessel_events', 'vessel_positions'].filter((k) => !row[k]);
+      const required = ['vessels', 'vessel_events', 'vessel_positions'];
+      const missing = required.filter((k) => !row[k]);
+      if (!row.telegram_subscriptions) {
+        logger.warn('[DB] Tabela telegram_subscriptions ausente — rode migrate para Sprint 2 Telegram.');
+      }
       if (missing.length > 0) {
         logger.error(`[DB] Missing tables: ${missing.join(', ')}. Run migrations.`);
       } else {
@@ -205,6 +210,58 @@ const db = {
   async ping() {
     await query('SELECT 1');
     return true;
+  },
+
+  async upsertTelegramSubscription(chatId, mmsi, eventFilter) {
+    await query(
+      `INSERT INTO telegram_subscriptions (chat_id, mmsi, event_filter, active, updated_at)
+       VALUES ($1, $2, $3, true, NOW())
+       ON CONFLICT (chat_id, mmsi) DO UPDATE SET
+         event_filter = EXCLUDED.event_filter,
+         active = true,
+         updated_at = NOW()`,
+      [chatId, mmsi, eventFilter],
+    );
+  },
+
+  async deactivateTelegramSubscription(chatId, mmsi) {
+    const res = await query(
+      `UPDATE telegram_subscriptions SET active = false, updated_at = NOW()
+       WHERE chat_id = $1 AND mmsi = $2 AND active`,
+      [chatId, mmsi],
+    );
+    return res.rowCount ?? 0;
+  },
+
+  async deactivateAllTelegramSubscriptions(chatId) {
+    const res = await query(
+      `UPDATE telegram_subscriptions SET active = false, updated_at = NOW()
+       WHERE chat_id = $1 AND active`,
+      [chatId],
+    );
+    return res.rowCount ?? 0;
+  },
+
+  async listTelegramSubscriptions(chatId) {
+    const res = await query(
+      `SELECT mmsi, event_filter, created_at, updated_at
+       FROM telegram_subscriptions
+       WHERE chat_id = $1 AND active
+       ORDER BY mmsi`,
+      [chatId],
+    );
+    return res.rows;
+  },
+
+  async getTelegramChatsForEvent(mmsi, eventType) {
+    const res = await query(
+      `SELECT DISTINCT chat_id
+       FROM telegram_subscriptions
+       WHERE active AND mmsi = $1
+         AND (event_filter = 'BOTH' OR event_filter = $2)`,
+      [mmsi, eventType],
+    );
+    return res.rows;
   },
 
   isConfigured: () => Boolean(pool),

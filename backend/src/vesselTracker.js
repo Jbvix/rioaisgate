@@ -1,6 +1,7 @@
 const { isInsideBay } = require('./geofence');
 const db = require('./db');
 const { enqueuePosition, enqueueUpsert } = require('./db/writeQueue');
+const { notifyGeofenceEvent } = require('./notifications');
 const logger = require('./logger');
 
 /** Trilhas brutas no Postgres — opt-in; mapa e eventos não dependem disso. */
@@ -58,6 +59,21 @@ async function recordEventAsync(mmsi, event_type, lat, lon, speed, heading, vess
     });
     logger.info(
       `[EVENT] ${event_type} | MMSI:${mmsi} | ${vessel.name || 'N/D'} | ${lat.toFixed(4)},${lon.toFixed(4)}`,
+    );
+    notifyGeofenceEvent(
+      {
+        ...event,
+        event_type,
+        mmsi: String(mmsi),
+        lat,
+        lon,
+        speed,
+      },
+      {
+        name: vessel.name || 'N/D',
+        ship_type_label: shipTypeLabel(vessel.ship_type),
+        flag: vessel.flag,
+      },
     );
   } catch (err) {
     logger.error(`[DB] recordEvent ${mmsi}: ${formatError(err)}`);

@@ -9,6 +9,8 @@ const logger = require('./logger');
 const { setBroadcast } = require('./vesselTracker');
 const { startDbWriteQueue } = require('./db/writeQueue');
 const { startRetentionSchedule } = require('./db/retention');
+const { telegram } = require('./notifications');
+const { startTelegramBotPolling } = require('./notifications/telegramBot');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -110,5 +112,7 @@ server.listen(PORT, () => {
   logger.info(`[SERVER] Listening on port ${PORT}`);
   startDbWriteQueue();
   startRetentionSchedule();
+  telegram.logStartupStatus();
+  startTelegramBotPolling();
   aisstream.start();
 });

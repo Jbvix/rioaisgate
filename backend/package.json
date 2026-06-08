@@ -8,7 +8,9 @@
     "dev": "nodemon src/index.js",
     "migrate": "node src/db/migrate.js",
     "backup": "node src/db/backup.js",
-    "prune": "node src/db/retention.js"
+    "prune": "node src/db/retention.js",
+    "telegram:test": "node scripts/telegram-test.js",
+    "telegram:chat-id": "node scripts/telegram-get-chat-id.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

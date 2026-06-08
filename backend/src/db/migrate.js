@@ -73,6 +73,23 @@ CREATE INDEX IF NOT EXISTS idx_vessel_positions_time ON vessel_positions(recorde
 CREATE OR REPLACE FUNCTION prune_old_positions() RETURNS void AS $$
   DELETE FROM vessel_positions WHERE recorded_at < NOW() - INTERVAL '24 hours';
 $$ LANGUAGE sql;
+
+CREATE TABLE IF NOT EXISTS telegram_subscriptions (
+  id           BIGSERIAL PRIMARY KEY,
+  chat_id      BIGINT       NOT NULL,
+  mmsi         VARCHAR(9)   NOT NULL,
+  event_filter VARCHAR(10)  NOT NULL DEFAULT 'BOTH'
+               CHECK (event_filter IN ('ENTRY','EXIT','BOTH')),
+  active       BOOLEAN      NOT NULL DEFAULT true,
+  created_at   TIMESTAMPTZ  DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ  DEFAULT NOW(),
+  UNIQUE (chat_id, mmsi)
+);
+
+CREATE INDEX IF NOT EXISTS idx_telegram_subs_mmsi
+  ON telegram_subscriptions(mmsi) WHERE active;
+CREATE INDEX IF NOT EXISTS idx_telegram_subs_chat
+  ON telegram_subscriptions(chat_id) WHERE active;
 `;
 
 (async () => {
