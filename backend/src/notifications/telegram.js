@@ -1,6 +1,7 @@
 const logger = require('../logger');
 const { formatGeofenceTelegramHtml } = require('./formatEventMessage');
 const subscriptions = require('./subscriptions');
+const mute = require('./mute');
 
 const API_BASE = 'https://api.telegram.org';
 
@@ -72,6 +73,10 @@ async function notifyGeofenceEvent(event, vessel = {}) {
   const results = [];
 
   for (const chatId of chatIds) {
+    if (mute.isChatMuted(chatId)) {
+      logger.info(`[TELEGRAM] ${event.event_type} MMSI:${event.mmsi} → chat ${chatId} (muted)`);
+      continue;
+    }
     try {
       await sendMessage(chatId, text);
       results.push({ chatId, ok: true });

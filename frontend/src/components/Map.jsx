@@ -78,13 +78,19 @@ function VesselMarkers({ vessels, onSelect }) {
   });
 }
 
-function FlyToVessel({ selectedMmsi, vessels }) {
+function FlyToVessel({ selectedMmsi, vessels, deepLinkLat, deepLinkLon }) {
   const map = useMap();
   useEffect(() => {
     if (!selectedMmsi) return;
     const v = vessels[selectedMmsi];
-    if (v?.lat != null) map.flyTo([v.lat, v.lon], 14, { duration: 1 });
-  }, [selectedMmsi, vessels, map]);
+    if (v?.lat != null) {
+      map.flyTo([v.lat, v.lon], 14, { duration: 1 });
+      return;
+    }
+    if (deepLinkLat != null && deepLinkLon != null) {
+      map.flyTo([deepLinkLat, deepLinkLon], 14, { duration: 1 });
+    }
+  }, [selectedMmsi, vessels, map, deepLinkLat, deepLinkLon]);
   return null;
 }
 
@@ -136,6 +142,8 @@ export default function Map({
   onGeofenceChange = () => {},
   baseLayer = 'osm',
   showSeaMarks = true,
+  deepLinkLat = null,
+  deepLinkLon = null,
 }) {
   const baseLayers = {
     osm: {
@@ -202,7 +210,12 @@ export default function Map({
       />
 
       <VesselMarkers vessels={vessels} onSelect={onSelectVessel} />
-      <FlyToVessel selectedMmsi={selectedMmsi} vessels={vessels} />
+      <FlyToVessel
+        selectedMmsi={selectedMmsi}
+        vessels={vessels}
+        deepLinkLat={deepLinkLat}
+        deepLinkLon={deepLinkLon}
+      />
     </MapContainer>
   );
 }

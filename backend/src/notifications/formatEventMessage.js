@@ -1,5 +1,24 @@
 const FEED_TZ = process.env.AIS_FEED_TIMEZONE || 'America/Sao_Paulo';
-const FRONTEND_URL = (process.env.FRONTEND_URL || 'https://riogateais.netlify.app').split(',')[0].trim();
+
+function getFrontendBaseUrl() {
+  return (process.env.FRONTEND_URL || 'https://riogateais.netlify.app').split(',')[0].trim().replace(/\/$/, '');
+}
+
+/**
+ * Deep link para o mapa com MMSI e posição do evento.
+ * @param {{ mmsi: string, lat?: number, lon?: number }} event
+ */
+function buildMapDeepLink(event) {
+  const base = getFrontendBaseUrl();
+  const params = new URLSearchParams();
+  if (event?.mmsi) params.set('mmsi', String(event.mmsi));
+  if (event?.lat != null && event?.lon != null) {
+    params.set('lat', String(Number(event.lat)));
+    params.set('lon', String(Number(event.lon)));
+  }
+  const qs = params.toString();
+  return qs ? `${base}/?${qs}` : base;
+}
 
 function escapeHtml(text) {
   return String(text ?? '')
@@ -38,7 +57,7 @@ function formatGeofenceTelegramHtml(event, vessel = {}) {
   const lat = Number(event.lat).toFixed(4);
   const lon = Number(event.lon).toFixed(4);
   const when = formatEventTime(event.occurred_at || new Date());
-  const mapUrl = FRONTEND_URL.replace(/\/$/, '');
+  const mapUrl = buildMapDeepLink(event);
 
   return (
     `${emoji} <b>${label}</b> — ${action}\n` +
@@ -46,8 +65,14 @@ function formatGeofenceTelegramHtml(event, vessel = {}) {
     `<b>Tipo:</b> ${escapeHtml(type)} · <b>Bandeira:</b> ${escapeHtml(flag)}\n` +
     `<b>Horário:</b> ${when} (${escapeHtml(FEED_TZ)})\n` +
     `<b>SOG:</b> ${escapeHtml(speed)} · <b>Pos:</b> ${lat}, ${lon}\n` +
-    `<a href="${escapeHtml(mapUrl)}">Abrir RioAISGate</a>`
+    `<a href="${escapeHtml(mapUrl)}">Ver no mapa</a>`
   );
 }
 
-module.exports = { formatGeofenceTelegramHtml, formatEventTime, escapeHtml };
+module.exports = {
+  formatGeofenceTelegramHtml,
+  formatEventTime,
+  escapeHtml,
+  buildMapDeepLink,
+  getFrontendBaseUrl,
+};

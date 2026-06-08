@@ -1,4 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
+import { readMapDeepLinkFromUrl } from './utils/mapDeepLink';
 import Map from './components/Map';
 import Dashboard from './components/Dashboard';
 import EventLog from './components/EventLog';
@@ -63,7 +64,8 @@ function MainApp({
   updateGeofenceWatch,
   toggleGeofenceWatch,
 }) {
-  const [selectedMmsi, setSelectedMmsi] = useState(null);
+  const [deepLink] = useState(() => readMapDeepLinkFromUrl());
+  const [selectedMmsi, setSelectedMmsi] = useState(deepLink.mmsi);
   const [sideTab, setSideTab] = useState('Eventos');
   const [geofencePolygon] = useState(loadSavedPolygon);
   const [baseLayer, setBaseLayer] = useState('osm');
@@ -181,6 +183,8 @@ function MainApp({
           geofencePolygon={geofencePolygon}
           baseLayer={baseLayer}
           showSeaMarks={showSeaMarks}
+          deepLinkLat={deepLink.lat}
+          deepLinkLon={deepLink.lon}
         />
 
         <div className="absolute top-4 right-4 z-[1000] flex flex-col items-end gap-2">

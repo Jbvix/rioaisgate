@@ -10,7 +10,7 @@ Alertas automáticos quando uma embarcação cruza a geofence da Baía de Guanab
 |--------|----------|--------|
 | **S1** | Broadcast fixo — todos os eventos para `TELEGRAM_CHAT_IDS` | Concluído |
 | **S2** | Assinaturas no Postgres + bot `/watch` / `/unwatch` por MMSI | Concluído |
-| **S3** | Link mapa, `/mute`, rate limit, painel admin opcional | Pendente |
+| **S3** | Link mapa, `/mute`, rate limit, painel admin opcional | Concluído (link + mute) |
 | **S4** | E-mail paralelo (mesma interface `notifications/`) | Pendente |
 
 Integração única: após `recordEvent` confirmado em `vesselTracker.js` → `notifyGeofenceEvent()`.
@@ -86,9 +86,21 @@ No Telegram (chat privado com o bot ou grupo): `/watch 710123456 entry`
 
 ## Sprint 3 — Refinamento
 
-- Deep link `FRONTEND_URL/?mmsi=…`
-- `/mute 30m`, rate limit por chat
-- Documentação operacional
+- [x] Deep link `FRONTEND_URL/?mmsi=…&lat=…&lon=…` (alerta Telegram + frontend)
+- [x] `/mute [min]` (padrão 30) e `/unmute`
+- [x] `/status` mostra se alertas estão silenciados
+- [ ] Rate limit por chat (opcional futuro)
+- [ ] Painel admin web (opcional futuro)
+
+### Comandos S3
+
+```
+/mute       → silencia 30 min
+/mute 120   → silencia 2 h
+/unmute     → reativa
+```
+
+Links de alerta abrem o mapa já focado na embarcação.
 
 ---
 

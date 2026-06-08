@@ -3,6 +3,7 @@ const aisstream = require('../aisstream');
 const { getActiveVessels } = require('../vesselTracker');
 const telegram = require('./telegram');
 const subscriptions = require('./subscriptions');
+const mute = require('./mute');
 
 const API_BASE = 'https://api.telegram.org';
 const POLL_TIMEOUT_S = 25;
@@ -39,6 +40,8 @@ function helpText() {
     '/unwatch all — remove todas\n' +
     '/list — suas vigias\n' +
     '/status — feed AIS e embarcações ativas\n' +
+    '/mute [min] — silencia alertas (padrão 30 min)\n' +
+    '/unmute — reativa alertas\n' +
     '/help — esta mensagem'
   );
 }
@@ -101,13 +104,25 @@ async function handleStatus(chatId) {
   const vessels = getActiveVessels();
   const inside = vessels.filter((v) => v.insideBay).length;
   const feed = st.connected ? '🟢 conectado' : '🔴 desconectado';
+  const muted = mute.formatMuteRemaining(chatId);
   await reply(
     chatId,
     `<b>Status RioAISGate</b>\n` +
       `Feed AIS: ${feed}\n` +
       `Embarcações ativas: ${vessels.length}\n` +
-      `Na baía: ${inside}`,
+      `Na baía: ${inside}\n` +
+      `Alertas: ${muted ? `🔕 silenciados (${muted})` : '🔔 ativos'}`,
   );
+}
+
+async function handleMute(chatId, args) {
+  const mins = mute.muteChat(chatId, args[0]);
+  await reply(chatId, `🔕 Alertas silenciados por <b>${mins}</b> min. Use <code>/unmute</code> para reativar.`);
+}
+
+async function handleUnmute(chatId) {
+  mute.unmuteChat(chatId);
+  await reply(chatId, '🔔 Alertas reativados.');
 }
 
 async function handleCommand(chatId, text) {
@@ -120,6 +135,8 @@ async function handleCommand(chatId, text) {
   if (cmd === '/unwatch') return handleUnwatch(chatId, args);
   if (cmd === '/list') return handleList(chatId);
   if (cmd === '/status') return handleStatus(chatId);
+  if (cmd === '/mute') return handleMute(chatId, args);
+  if (cmd === '/unmute') return handleUnmute(chatId);
   return null;
 }
 
@@ -177,7 +194,7 @@ function startTelegramBotPolling() {
   }
   if (polling) return;
   polling = true;
-  logger.info('[TELEGRAM-BOT] Polling ativo — /watch, /list, /status');
+  logger.info('[TELEGRAM-BOT] Polling ativo — /watch, /list, /status, /mute');
   runPollCycle();
 }
 
