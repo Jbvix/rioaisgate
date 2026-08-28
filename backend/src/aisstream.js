@@ -42,15 +42,17 @@ function connect() {
     await handleMessage(msg);
   });
 
-  ws.on('close', (code) => {
+  ws.on('close', (code, reason) => {
     connected = false;
-    console.warn(`[AISSTREAM] Disconnected (code ${code}). Reconnecting in ${RECONNECT_DELAY_MS / 1000}s…`);
+    const hint = code === 1006
+      ? ' → Verifique se AISSTREAM_API_KEY e valida em aisstream.io/profile'
+      : '';
+    console.warn(`[AISSTREAM] Disconnected (code ${code}${reason ? ': ' + reason : ''})${hint}. Reconnecting in ${RECONNECT_DELAY_MS / 1000}s…`);
     scheduleReconnect();
   });
 
   ws.on('error', (err) => {
-    console.error('[AISSTREAM] Error:', err.message);
-    // 'close' will fire after error
+    console.error('[AISSTREAM] WebSocket error:', err.message);
   });
 }
 
@@ -81,7 +83,6 @@ async function handleMessage(msg) {
       nav_status: r.NavigationalStatus != null ? Number(r.NavigationalStatus) : null,
     });
 
-    // Update name if provided in metadata
     if (meta.ShipName) {
       await updateStaticData(mmsi, { name: meta.ShipName.trim() });
     }
