@@ -6,6 +6,7 @@ import {
 } from 'chart.js';
 import { Bar, Doughnut } from 'react-chartjs-2';
 import { API_URL } from '../config';
+import { requestJson } from '../utils/request.mjs';
 import { getDailyTrafficLabels } from '../utils/chartLabels';
 
 const DAILY_DAYS = 7;
@@ -48,27 +49,25 @@ export default function Charts() {
   const [shipTypes, setShipTypes] = useState([]);
   const [tab, setTab] = useState('daily');
 
+  const [requestState, setRequestState] = useState({ loading: true, error: false, updatedAt: null });
+  const [reload, setReload] = useState(0);
   useEffect(() => {
-    fetch(`${API_URL}/api/stats/daily?days=${DAILY_DAYS}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (Array.isArray(data)) {
-          const dayKeys = [...new Set(data.map((r) => r.day?.split('T')[0]).filter(Boolean))].sort();
-          setDaily(data);
-          setDailyMeta({
-            daysRequested: DAILY_DAYS,
-            daysWithData: dayKeys.length,
-            dataSince: dayKeys[0] ? `${dayKeys[0]}T12:00:00.000Z` : null,
-          });
-          return;
-        }
-        setDaily(data.rows || []);
-        setDailyMeta(data.meta || null);
-      })
-      .catch(() => {});
-    fetch(`${API_URL}/api/stats/hourly`).then(r => r.json()).then(setHourly).catch(() => {});
-    fetch(`${API_URL}/api/stats/ship-types`).then(r => r.json()).then(setShipTypes).catch(() => {});
-  }, []);
+    let cancelled = false;
+    setRequestState((prev) => ({ ...prev, loading: true, error: false }));
+    Promise.all([
+      requestJson(`${API_URL}/api/stats/daily?days=${DAILY_DAYS}`),
+      requestJson(`${API_URL}/api/stats/hourly`),
+      requestJson(`${API_URL}/api/stats/ship-types`),
+    ]).then(([d, h, t]) => {
+      if (!Array.isArray(d.rows) || !Array.isArray(h) || !Array.isArray(t)) throw new Error('Invalid statistics');
+      if (cancelled) return;
+      setDaily(d.rows); setDailyMeta(d.meta); setHourly(h); setShipTypes(t);
+      setRequestState({ loading: false, error: false, updatedAt: Date.now() });
+    }).catch(() => {
+      if (!cancelled) setRequestState((prev) => ({ ...prev, loading: false, error: true }));
+    });
+    return () => { cancelled = true; };
+  }, [reload]);
 
   const dailyChart = buildDailyChart(daily);
   const dailyLabels = getDailyTrafficLabels(dailyMeta, dailyChart?.labels?.length ?? 0);
@@ -76,8 +75,8 @@ export default function Charts() {
   const typeChart = buildTypeChart(shipTypes);
 
   return (
-    <div className="flex flex-col gap-3 h-full">
-      <div className="flex gap-2 px-4 pt-3">
+    <div className="charts-panel flex flex-col gap-3 h-full min-w-0">
+      <div className="flex gap-2 px-4 pt-3 shrink-0">
         {['daily', 'hourly', 'types'].map(t => (
           <button
             key={t}
@@ -90,7 +89,12 @@ export default function Charts() {
           </button>
         ))}
       </div>
-      <div className="flex-1 px-4 pb-4 min-h-0">
+      <div className="px-4 text-xs text-white/70" role="status" aria-live="polite">
+        {requestState.loading ? 'Carregando gráficos…' : requestState.error ? 'Falha ao atualizar gráficos. Dados anteriores podem estar desatualizados.' : requestState.updatedAt ? `Última consulta: ${new Date(requestState.updatedAt).toLocaleTimeString('pt-BR')}` : ''}
+        <button type="button" className="underline ml-2 py-2" disabled={requestState.loading} onClick={() => setReload((n) => n + 1)}>Atualizar</button>
+        {dailyMeta?.retentionDays && <p>Histórico disponível sujeito à retenção de {dailyMeta.retentionDays} dias.</p>}
+      </div>
+      <div className="chart-plot flex-1 px-4 pb-4 min-h-0 min-w-0">
         {tab === 'daily' && dailyChart && (
           <div className="flex flex-col h-full min-h-0 gap-1">
             {dailyLabels.subtitle && (
@@ -116,16 +120,16 @@ export default function Charts() {
           </div>
         )}
         {tab === 'hourly' && hourlyChart && (
-          <Bar data={hourlyChart} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, title: { display: true, text: 'Distribuição por hora (30 dias)', color: '#94a3b8' } } }} />
+          <Bar data={hourlyChart} options={{ ...CHART_OPTS, plugins: { ...CHART_OPTS.plugins, title: { display: true, text: 'Distribuição por hora (até 30 dias retidos)', color: '#94a3b8' } } }} />
         )}
         {tab === 'types' && typeChart && (
           <div className="flex items-center justify-center h-full">
-            <div style={{ width: '240px', height: '240px' }}>
-              <Doughnut data={typeChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { color: '#94a3b8', font: { size: 10 } } } } }} />
+            <div className="w-full h-full min-h-[240px] max-w-[320px]">
+              <Doughnut data={typeChart} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: '#94a3b8', font: { size: 10 } } } } }} />
             </div>
           </div>
         )}
-        {!daily.length && !hourly.length && !shipTypes.length && (
+        {!requestState.loading && !requestState.error && !({ daily: dailyChart, hourly: hourlyChart, types: typeChart }[tab]) && (
           <div className="flex items-center justify-center h-full text-white/30 text-sm">
             Dados históricos aparecerão aqui
           </div>

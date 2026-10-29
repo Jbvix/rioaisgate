@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { API_URL } from '../config';
+import { requestJson } from '../utils/request.mjs';
 import { formatOccurredAt } from '../utils/formatOccurredAt';
 
 const NAV_STATUS = [
@@ -15,13 +16,19 @@ export default function VesselDetail({
   onToggleGeofenceWatch,
 }) {
   const [history, setHistory] = useState([]);
+  const [historyState, setHistoryState] = useState('loading');
 
   useEffect(() => {
+    let cancelled = false;
+    setHistory([]); setHistoryState('loading');
     if (!mmsi) return;
-    fetch(`${API_URL}/api/vessels/${mmsi}/history?limit=10`)
-      .then(r => r.json())
-      .then(setHistory)
-      .catch(() => {});
+    requestJson(`${API_URL}/api/vessels/${encodeURIComponent(mmsi)}/history?limit=10`)
+      .then((rows) => {
+        if (!Array.isArray(rows)) throw new Error('Invalid history');
+        if (!cancelled) { setHistory(rows); setHistoryState('ready'); }
+      })
+      .catch(() => { if (!cancelled) setHistoryState('error'); });
+    return () => { cancelled = true; };
   }, [mmsi]);
 
   if (!mmsi) return null;
@@ -40,7 +47,8 @@ export default function VesselDetail({
         </div>
         <button
           onClick={onClose}
-          className="text-white/40 hover:text-white transition-colors text-xl leading-none"
+          aria-label="Fechar detalhes da embarcação"
+          className="min-h-11 min-w-11 shrink-0 text-white/70 hover:text-white transition-colors text-xl leading-none"
         >
           ×
         </button>
@@ -89,6 +97,7 @@ export default function VesselDetail({
         <Info label="Na baía" value={vessel?.insideBay != null ? (vessel.insideBay ? 'Sim' : 'Não') : null} />
       </div>
 
+      <p role="status" className="text-xs text-white/70">{historyState === 'loading' ? 'Carregando histórico…' : historyState === 'error' ? 'Não foi possível carregar o histórico desta embarcação.' : !history.length ? 'Nenhum cruzamento registrado no período disponível.' : ''}</p>
       {history.length > 0 && (
         <div>
           <div className="text-xs text-white/40 uppercase tracking-widest mb-1">Histórico de cruzamentos</div>
@@ -112,7 +121,7 @@ function Info({ label, value }) {
   return (
     <div className="bg-navy-700 rounded-lg px-2 py-1.5">
       <div className="text-xs text-white/40 uppercase tracking-wider">{label}</div>
-      <div className="text-white text-sm font-medium mt-0.5">{value ?? '—'}</div>
+      <div className="text-white text-sm font-medium mt-0.5 break-words">{value ?? '—'}</div>
     </div>
   );
 }

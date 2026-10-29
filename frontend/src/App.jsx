@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { readMapDeepLinkFromUrl } from './utils/mapDeepLink';
 import Map from './components/Map';
 import Dashboard from './components/Dashboard';
+import AisControl from './components/AisControl';
 import EventLog from './components/EventLog';
 import VesselList from './components/VesselList';
 import VesselDetail from './components/VesselDetail';
-import Charts from './components/Charts';
+const Charts = lazy(() => import('./components/Charts'));
 import SplashScreen from './components/SplashScreen';
 import UserManual from './components/UserManual';
 import { useVessels } from './hooks/useVessels';
@@ -79,6 +80,9 @@ function MainApp({
   events,
   stats,
   feedStatus,
+  dataStatus,
+  refreshData,
+  realtimeConnected,
   geofenceWatch,
   updateGeofenceWatch,
   toggleGeofenceWatch,
@@ -93,6 +97,36 @@ function MainApp({
   const [showSeaMarks, setShowSeaMarks] = useState(true);
   const [mapMenuOpen, setMapMenuOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches);
+  const panelRef = useRef(null);
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1023px)');
+    const update = () => setIsMobile(query.matches);
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
+  useEffect(() => {
+    if (!panelOpen || !isMobile) return;
+    const previous = document.activeElement;
+    const focusable = () => [...panelRef.current.querySelectorAll('button, input, select, summary, a[href], [tabindex="0"]')].filter((el) => !el.disabled && el.getClientRects().length);
+    focusable()[0]?.focus();
+    const trapFocus = (event) => {
+      if (event.key !== 'Tab') return;
+      const controls = focusable();
+      const first = controls[0]; const last = controls[controls.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+    };
+    document.addEventListener('keydown', trapFocus);
+    return () => { document.removeEventListener('keydown', trapFocus); if (previous?.isConnected) previous.focus(); };
+  }, [panelOpen, isMobile]);
+
+
+  useEffect(() => {
+    const escape = (event) => { if (event.key === 'Escape') { setPanelOpen(false); setMapMenuOpen(false); } };
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, []);
 
   const openPanel = useCallback(() => setPanelOpen(true), []);
   const closePanel = useCallback(() => setPanelOpen(false), []);
@@ -111,7 +145,7 @@ function MainApp({
   }, [deepLink.mmsi]);
 
   return (
-    <div className="flex h-screen max-h-[100dvh] bg-navy-900 overflow-hidden animate-[fadeIn_0.4s_ease-out] lg:flex-row">
+    <div className="app-shell flex bg-navy-900 overflow-hidden animate-[fadeIn_0.4s_ease-out] lg:flex-row">
       {/* Overlay mobile */}
       {panelOpen && (
         <button
@@ -124,11 +158,18 @@ function MainApp({
 
       {/* ── Sidebar (drawer no mobile) ─────────────────── */}
       <aside
+        id="operations-panel"
+        ref={panelRef}
+        inert={isMobile && !panelOpen ? '' : undefined}
+        aria-hidden={isMobile && !panelOpen ? true : undefined}
+        role={isMobile && panelOpen ? 'dialog' : undefined}
+        aria-modal={isMobile && panelOpen ? true : undefined}
+        aria-label="Painel de monitoramento"
         className={[
-          'fixed inset-y-0 left-0 z-[2000] flex w-[min(100%,20rem)] max-w-full flex-col',
-          'bg-navy-800 border-r border-navy-700 shadow-2xl',
+          'operations-panel fixed inset-y-0 left-0 z-[2000] flex max-w-full flex-col',
+          'bg-navy-900 border-r border-navy-700 shadow-2xl',
           'transition-transform duration-300 ease-out lg:transition-none',
-          'lg:static lg:z-auto lg:w-80 lg:flex-shrink-0 lg:shadow-none',
+          'lg:static lg:z-auto lg:flex-shrink-0 lg:shadow-none',
           panelOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
         ].join(' ')}
       >
@@ -151,12 +192,12 @@ function MainApp({
                   : feedStatus.api_unreachable
                     ? 'Backend indisponível — verifique deploy Railway'
                     : feedStatus.connected
-                      ? 'Feed AIS conectado (sinal em tempo real)'
-                      : feedStatus.within_window === false
-                        ? `AIS pausado fora da janela (${feedStatus.start_hour}h–${feedStatus.end_hour}h ${feedStatus.timezone || 'America/Sao_Paulo'})`
+                      ? 'Feed AIS conectado — operação contínua 24h'
+                      : feedStatus.manual_enabled === false
+                        ? 'Feed pausado manualmente pelo controle com PIN'
                         : feedStatus.api_key_set === false
                           ? 'AISSTREAM_API_KEY não configurada no servidor'
-                          : 'Dentro da janela, mas sem conexão AIS — reconectando ou falha no stream'
+                          : 'Sem conexão AIS — reconexão automática ativa 24h'
               }
             >
               <div
@@ -167,9 +208,7 @@ function MainApp({
                       ? 'bg-rose-500'
                       : feedStatus.connected
                         ? 'bg-emerald-400 animate-pulse'
-                        : feedStatus.within_window === false
-                          ? 'bg-sky-500/90'
-                          : 'bg-amber-400 animate-pulse'
+                        : feedStatus.manual_enabled === false ? 'bg-sky-400' : 'bg-amber-400 animate-pulse'
                 }`}
               />
               <span className="text-[10px] sm:text-xs text-white/60 hidden min-[380px]:inline">
@@ -178,16 +217,14 @@ function MainApp({
                   : feedStatus.api_unreachable
                     ? 'API offline'
                     : feedStatus.connected
-                      ? 'Live'
-                      : feedStatus.within_window === false
-                        ? 'Standby'
-                        : 'Sem sinal'}
+                      ? 'Live · 24h'
+                      : feedStatus.manual_enabled === false ? 'Pausado' : feedStatus.api_key_set === false ? 'Sem sinal' : 'Reconectando'}
               </span>
             </div>
             <button
               type="button"
               onClick={closePanel}
-              className="lg:hidden shrink-0 rounded-lg p-1.5 text-white/50 hover:text-white hover:bg-navy-700"
+              className="lg:hidden shrink-0 rounded-lg min-h-11 min-w-11 p-1.5 text-white/50 hover:text-white hover:bg-navy-700"
               aria-label="Fechar painel"
             >
               ✕
@@ -222,8 +259,17 @@ function MainApp({
           </button>
         </div>
 
-        <div className="flex flex-1 flex-col min-h-0 overflow-hidden">
-          <div className="shrink-0 overflow-y-auto dark-scroll max-h-[38vh] lg:max-h-none">
+        <div className="operations-body flex flex-1 flex-col min-h-0">
+          <div className="operations-summary shrink-0">
+            <AisControl feedStatus={feedStatus} onChanged={refreshData} />
+            <div className="px-3 pt-2 text-xs text-white/70" role="status" aria-live="polite">
+              {dataStatus.errors.length > 0 ? (
+                <><p className="text-amber-300">Falha ao atualizar: {dataStatus.errors.join(', ')}. Os dados podem estar desatualizados.</p>
+                <button type="button" className="underline py-2" onClick={refreshData}>Tentar novamente</button></>
+              ) : dataStatus.updatedAt ? <p>Última consulta: {new Date(dataStatus.updatedAt).toLocaleTimeString('pt-BR')}</p> : <p>Carregando dados…</p>}
+              <p className="mt-1 text-white/65">{realtimeConnected ? 'Atualização em tempo real conectada' : 'Tempo real desconectado · consultas a cada 45 s'}</p>
+              <details className="mt-2"><summary className="cursor-pointer text-white/65">Sobre a atualização das posições</summary><p className="mt-1 leading-relaxed">Posições podem permanecer em cache por até 2 horas. Consulte o sinal AIS antes de usá-las. A última consulta não indica a hora da transmissão AIS.</p></details>
+            </div>
             <Dashboard stats={stats} vessels={vessels} />
 
             {selectedMmsi && (
@@ -240,16 +286,17 @@ function MainApp({
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b border-navy-700 px-2 sm:px-3 shrink-0">
+          <div className="operations-tabs flex border-b border-navy-700 px-2 sm:px-3 shrink-0">
             {TABS.filter((t) => t !== 'Mapa').map((t) => (
               <button
                 key={t}
                 type="button"
                 onClick={() => setSideTab(t)}
+                aria-pressed={sideTab === t}
                 className={`flex-1 py-2 text-[10px] sm:text-xs font-medium transition-colors ${
                   sideTab === t
                     ? 'text-ocean-400 border-b-2 border-ocean-400'
-                    : 'text-white/40 hover:text-white/70'
+                    : 'text-white/70 hover:text-white'
                 }`}
               >
                 {t === 'Embarcações' ? (
@@ -265,20 +312,20 @@ function MainApp({
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="operations-content flex-1 min-h-0">
             {sideTab === 'Eventos' && (
               <EventLog events={events} onSelectVessel={handleSelectVessel} />
             )}
             {sideTab === 'Embarcações' && (
               <VesselList vessels={vessels} onSelect={handleSelectVessel} selectedMmsi={selectedMmsi} />
             )}
-            {sideTab === 'Gráficos' && <Charts />}
+            {sideTab === 'Gráficos' && <Suspense fallback={<p role="status" className="p-4 text-sm text-white/70">Carregando gráficos…</p>}><Charts /></Suspense>}
           </div>
         </div>
       </aside>
 
       {/* ── Map ─────────────────────────────────────────── */}
-      <main className="relative flex-1 min-w-0 min-h-0">
+      <main inert={isMobile && panelOpen ? '' : undefined} aria-label="Mapa de embarcações" className="relative flex-1 min-w-0 min-h-0">
         <Map
           vessels={vessels}
           selectedMmsi={selectedMmsi}
@@ -290,13 +337,14 @@ function MainApp({
           deepLinkLon={deepLink.lon}
         />
 
-        <div className="absolute top-3 right-3 z-[1000] flex flex-col items-end gap-2 sm:top-4 sm:right-4">
+        <div className="map-layers absolute z-[1000] flex flex-col items-end gap-2">
           <button
             type="button"
-            className="rounded-lg border border-navy-600 bg-navy-800/90 px-2.5 py-2 sm:px-3 text-sm text-white shadow-lg backdrop-blur hover:bg-navy-700"
+            className="min-h-11 min-w-11 rounded-lg border border-navy-600 bg-navy-800/90 px-2.5 py-2 sm:px-3 text-sm text-white shadow-lg backdrop-blur hover:bg-navy-700"
             onClick={() => setMapMenuOpen((v) => !v)}
             title="Menu do mapa"
             aria-label="Camadas do mapa"
+            aria-expanded={mapMenuOpen}
           >
             ☰
           </button>
@@ -329,12 +377,14 @@ function MainApp({
           )}
         </div>
 
-        <div className="absolute bottom-3 left-3 z-[1000] flex flex-col items-start gap-2 sm:bottom-4 sm:left-auto sm:right-4 sm:items-end">
+        <div className="map-summary absolute z-[1000] flex items-end gap-2">
           <button
             type="button"
             onClick={openPanel}
-            className="flex items-center gap-1.5 rounded-lg border border-navy-600 bg-navy-800/95 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur hover:bg-navy-700 lg:hidden"
+            className="min-h-11 flex items-center gap-1.5 rounded-lg border border-navy-600 bg-navy-800/95 px-3 py-2 text-xs font-medium text-white shadow-lg backdrop-blur hover:bg-navy-700 lg:hidden"
             aria-label="Abrir painel"
+            aria-controls="operations-panel"
+            aria-expanded={panelOpen}
           >
             <span aria-hidden>☰</span>
             <span>Painel</span>
@@ -386,7 +436,7 @@ export default function App() {
     });
   }, []);
 
-  const { vessels, events, stats, feedStatus, bootstrap } = useVessels(onGeofenceEvent);
+  const { vessels, events, stats, feedStatus, bootstrap, dataStatus, refreshData, realtimeConnected } = useVessels(onGeofenceEvent);
 
   useEffect(() => {
     if (!bootstrap.done || !barSoundEnabled) return;
@@ -450,6 +500,9 @@ export default function App() {
       events={events}
       stats={stats}
       feedStatus={feedStatus}
+      dataStatus={dataStatus}
+      refreshData={refreshData}
+      realtimeConnected={realtimeConnected}
       geofenceWatch={geofenceWatch}
       updateGeofenceWatch={updateGeofenceWatch}
       toggleGeofenceWatch={toggleGeofenceWatch}

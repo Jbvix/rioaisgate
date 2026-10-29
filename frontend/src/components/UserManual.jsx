@@ -18,15 +18,16 @@ const SECTIONS = [
   {
     title: 'Início e carregamento',
     body:
-      'Ao abrir o painel, uma tela de boas-vindas carrega embarcações, eventos e a conexão em tempo real (mínimo ~15 segundos). Você pode abrir este manual durante o carregamento pelo botão na splash. Após entrar, o mapa sincroniza via WebSocket; se o sinal AIS estiver ativo, as posições atualizam assim que cada embarcação transmite.',
+      'Ao abrir o painel, uma tela de boas-vindas carrega embarcações, eventos e a conexão em tempo real (sem espera artificial; requisições têm prazo de 8 segundos). Você pode abrir este manual durante o carregamento pelo botão na splash. Após entrar, o mapa sincroniza via WebSocket; se o sinal AIS estiver ativo, as posições atualizam assim que cada embarcação transmite.',
   },
   {
     title: 'Indicador Live / Sem sinal',
     body: 'No canto superior do painel, o ponto colorido indica o estado do feed AIS:',
     items: [
       'Live (verde): feed conectado e recebendo posições.',
-      'Sem sinal (âmbar): dentro da janela horária, mas sem conexão com o stream — o servidor tenta reconectar.',
-      'Standby (azul): feed pausado fora da janela configurada no servidor (ex.: horário comercial).',
+      'Sem sinal (âmbar): sem conexão com o stream — o servidor tenta reconectar.',
+      'Operação 24h: sem pausa por horário, com reconexão automática. O botão Controle AIS permite pausar ou reativar com PIN; a pausa afeta todos os usuários e termina ao reiniciar o backend.',
+      'Pausado (azul): o feed foi desligado manualmente pelo controle com PIN.',
       'API offline (vermelho): backend indisponível — verifique o deploy no Railway.',
     ],
   },

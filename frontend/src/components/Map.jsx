@@ -28,6 +28,17 @@ function vesselIcon(vessel) {
   });
 }
 
+// Leaflet must recalculate its canvas when the sidebar/breakpoint changes.
+function ResizeMap() {
+  const map = useMap();
+  useEffect(() => {
+    const observer = new ResizeObserver(() => map.invalidateSize({ pan: false }));
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+  return null;
+}
+
 function VesselMarkers({ vessels, onSelect }) {
   const navStatusLabel = (value) => {
     if (value == null) return 'N/D';
@@ -44,7 +55,7 @@ function VesselMarkers({ vessels, onSelect }) {
         eventHandlers={{ click: () => onSelect(v.mmsi) }}
       >
         <Tooltip direction="top" offset={[0, -10]} opacity={0.95}>
-          <div style={{ minWidth: 220, fontSize: '0.75rem', lineHeight: 1.45 }}>
+          <div style={{ width: 'min(220px, calc(100vw - 80px))', overflowWrap: 'anywhere', fontSize: '0.75rem', lineHeight: 1.45 }}>
             <div style={{ fontWeight: 700 }}>{v.name || 'Embarcação desconhecida'}</div>
             <div>MMSI: {v.mmsi}</div>
             <div>Tipo: {v.ship_type_label || 'N/D'}</div>
@@ -177,6 +188,7 @@ export default function Map({
       style={{ width: '100%', height: '100%' }}
       zoomControl={true}
     >
+      <ResizeMap />
       {/* Base layer */}
       <TileLayer
         attribution={chosenBase.attribution}

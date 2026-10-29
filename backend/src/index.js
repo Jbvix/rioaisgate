@@ -63,13 +63,19 @@ const corsOptions = {
     if (isAllowedOrigin(origin)) return callback(null, true);
     return callback(new Error(`Origin not allowed by CORS: ${origin}`));
   },
-  methods: ['GET', 'OPTIONS'],
+  methods: ['GET', 'POST', 'OPTIONS'],
 };
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
 app.use(express.json());
 app.use('/api', api);
+app.use((err, _req, res, _next) => {
+  logger.error(`[HTTP] ${err.message}`);
+  const badJson = err.type === 'entity.parse.failed';
+  const status = badJson ? 400 : err.type === 'entity.too.large' ? 413 : 500;
+  res.status(status).json({ error: badJson ? 'JSON inválido.' : 'Não foi possível concluir a solicitação.' });
+});
 
 const server = http.createServer(app);
 

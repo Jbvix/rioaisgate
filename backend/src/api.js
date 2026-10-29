@@ -4,6 +4,7 @@ const logger = require('./logger');
 const { getActiveVessels, shipTypeLabel } = require('./vesselTracker');
 const { isConnected, getStatus, setEnabled } = require('./aisstream');
 
+const { requireControlPin } = require('./aisControl');
 const router = express.Router();
 
 function formatError(err) {
@@ -29,7 +30,7 @@ function formatError(err) {
 function handleApiError(res, label, err) {
   const message = formatError(err);
   logger.error(`[API] ${label}: ${message}`);
-  res.status(500).json({ error: message });
+  res.status(500).json({ error: 'Não foi possível concluir a solicitação.' });
 }
 
 const HEALTH_DB_TIMEOUT_MS = 3000;
@@ -44,37 +45,44 @@ router.get('/health/live', (_req, res) => {
   });
 });
 
-// Health completo — DB com timeout curto para não travar o gateway (502)
+// Readiness: dependency failures must be visible to deployment monitors.
 router.get('/health', async (_req, res) => {
   let dbOk = false;
-  let dbError = null;
-  if (!db.isConfigured()) {
-    dbError = 'DATABASE_URL is not configured';
-  } else {
-    try {
-      await Promise.race([
-        db.ping(),
-        new Promise((_, reject) => {
-          setTimeout(
-            () => reject(new Error(`Database ping timeout (${HEALTH_DB_TIMEOUT_MS}ms)`)),
-            HEALTH_DB_TIMEOUT_MS,
-          );
-        }),
-      ]);
-      dbOk = true;
-    } catch (err) {
-      dbError = formatError(err);
-    }
+  let timer;
+  try {
+    if (!db.isConfigured()) throw new Error('Database is not configured');
+    await Promise.race([
+      db.ping(),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('Database ping timeout')), HEALTH_DB_TIMEOUT_MS);
+      }),
+    ]);
+    dbOk = true;
+  } catch (err) {
+    logger.error(`[HEALTH] ${formatError(err)}`);
+  } finally {
+    clearTimeout(timer);
   }
-  res.status(200).json({
-    ok: true,
-    aisstream: isConnected(),
-    vessels: getActiveVessels().length,
-    db: dbOk,
-    dbError,
+  res.status(dbOk ? 200 : 503).json({
+    ok: dbOk, db: dbOk, dbError: dbOk ? null : 'Banco de dados indisponível.',
+    aisstream: isConnected(), vessels: getActiveVessels().length,
     ts: new Date().toISOString(),
   });
 });
+
+function positiveInteger(req, res, next) {
+  for (const [name, fallback, max] of req.path === '/stats/daily'
+    ? [['days', 7, 90]]
+    : [['limit', req.params.mmsi ? 50 : 100, req.params.mmsi ? 200 : 500]]) {
+    const raw = req.query[name];
+    if (raw === undefined) { req.validated = { [name]: fallback }; continue; }
+    if (typeof raw !== 'string' || !/^\d+$/.test(raw) || !Number.isSafeInteger(Number(raw)) || Number(raw) < 1 || Number(raw) > max) {
+      return res.status(400).json({ error: `${name} deve ser um inteiro entre 1 e ${max}.` });
+    }
+    req.validated = { [name]: Number(raw) };
+  }
+  next();
+}
 
 router.get('/aisstream/status', (_req, res) => {
   res.json({
@@ -84,13 +92,16 @@ router.get('/aisstream/status', (_req, res) => {
   });
 });
 
-router.post('/aisstream/toggle', (req, res) => {
-  const enabled = req.body?.enabled;
-  if (typeof enabled !== 'boolean') {
-    return res.status(400).json({ error: 'enabled must be boolean' });
+// The PIN is checked on every state change and never returned to clients.
+router.post('/aisstream/toggle', requireControlPin, (req, res) => {
+  if (typeof req.body?.enabled !== 'boolean') {
+    return res.status(400).json({ error: 'enabled deve ser booleano.' });
   }
-  setEnabled(enabled);
-  return res.json(getStatus());
+  if (req.body.enabled && !process.env.AISSTREAM_API_KEY?.trim()) {
+    return res.status(503).json({ error: 'Chave do provedor AIS não configurada.' });
+  }
+  setEnabled(req.body.enabled);
+  res.json({ ...getStatus(), api_key_set: Boolean(process.env.AISSTREAM_API_KEY?.trim()) });
 });
 
 // Active vessels (in-memory, last 30 min)
@@ -99,9 +110,9 @@ router.get('/vessels', (_req, res) => {
 });
 
 // Recent crossing events
-router.get('/events', async (req, res) => {
+router.get('/events', positiveInteger, async (req, res) => {
   try {
-    const limit = Math.min(Number(req.query.limit) || 100, 500);
+    const limit = req.validated.limit;
     const rows = await db.getRecentEvents(limit);
     res.json(rows.map(r => ({ ...r, ship_type_label: shipTypeLabel(r.ship_type) })));
   } catch (err) {
@@ -125,9 +136,9 @@ router.get('/stats/today', async (_req, res) => {
 });
 
 // Daily traffic for last N days
-router.get('/stats/daily', async (req, res) => {
+router.get('/stats/daily', positiveInteger, async (req, res) => {
   try {
-    const days = Math.min(Number(req.query.days) || 7, 90);
+    const days = req.validated.days;
     const [rows, metaRow] = await Promise.all([
       db.getDailyStats(days),
       db.getDailyStatsMeta(days),
@@ -136,6 +147,7 @@ router.get('/stats/daily', async (req, res) => {
       rows,
       meta: {
         daysRequested: days,
+        retentionDays: require('./db/retention').EVENT_RETENTION_DAYS,
         daysWithData: Number(metaRow.days_with_data) || 0,
         dataSince: metaRow.data_since,
       },
@@ -165,11 +177,11 @@ router.get('/stats/ship-types', async (_req, res) => {
 });
 
 // Vessel history by MMSI
-router.get('/vessels/:mmsi/history', async (req, res) => {
+router.get('/vessels/:mmsi/history', positiveInteger, async (req, res) => {
   try {
     const { mmsi } = req.params;
     if (!/^\d{9}$/.test(mmsi)) return res.status(400).json({ error: 'MMSI inválido' });
-    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const limit = req.validated.limit;
     const rows = await db.getVesselHistory(mmsi, limit);
     res.json(rows.map(r => ({ ...r, ship_type_label: shipTypeLabel(r.ship_type) })));
   } catch (err) {

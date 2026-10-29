@@ -1,147 +1,54 @@
-# Backup mensal — passo a passo (RioAISGate)
+# Retenção, backup e recuperação
 
-## O que fica onde
+## Política de dados
 
-| O quê | Onde | Por quanto tempo |
-|-------|------|------------------|
-| Mapa ao vivo | Memória do backend | ~30 minutos |
-| Eventos / estatísticas no app | Postgres `vessel_events` | **7 dias** (automático) |
-| Posições AIS brutas | Postgres `vessel_positions` | **Desligado** no app (`AIS_SAVE_POSITIONS=false`); backup mensal se precisar histórico |
-| **Arquivo para guardar** | Pasta `backups/` no seu PC | **Você define** (OneDrive, etc.) |
+| Dados | Padrão |
+|---|---|
+| Embarcações ativas no backend | Última atualização há até 30 minutos |
+| Cache de posições no navegador | Até 2 horas; não comprova posição atual |
+| Eventos de entrada/saída | 7 dias (`EVENT_RETENTION_DAYS`) |
+| Posições brutas, se `AIS_SAVE_POSITIONS=true` | 6 horas e teto de 8.000 linhas |
+| Assinaturas Telegram | Persistentes no PostgreSQL |
 
-Histórico longo = **backup mensal** em arquivo, não deixar tudo no banco.
+Os gráficos por hora e tipo consultam até 30 dias, mas só podem usar os registros ainda retidos. Aumentar a retenção não recupera registros já apagados. Defina o período conforme a necessidade de análise e capacidade do banco; o padrão permanece em 7 dias.
 
----
+**Backup mensal não preserva todos os eventos de uma retenção de 7 dias.** Para arquivamento completo, agende backups antes da expiração, por exemplo diariamente, com monitoramento de falhas e cópia em armazenamento protegido fora do servidor. Posições brutas exigem frequência compatível com a retenção por hora e com o teto de linhas.
 
-## Passo a passo (primeira vez)
+## Exportação JSONL
 
-### 1. Abrir a conexão no Railway
+Em `backend`, `npm run backup` gera JSONL e um manifesto em `backups/rioaisgate-*`. É uma exportação para análise: não inclui assinaturas Telegram e não oferece uma visão transacional única durante gravações concorrentes. Não use essa exportação como única estratégia de recuperação.
 
-1. Acesse [railway.app](https://railway.app) → projeto **rioaisgate**.
-2. Clique no serviço **Postgres** (elefante).
-3. Aba **Database** ou botão **Connect**.
-4. Escolha **Public Network** (rede pública — funciona do seu PC).
-5. Em **Variables** (do Postgres), copie **`DATABASE_URL`** inteira  
-   — ou monte com **show** na senha do modal:
-   - Host: `shuttle.proxy.rlwy.net`
-   - Porta: `18529`
-   - Usuário: `postgres`
-   - Banco: `railway`
+Não envie backups ou credenciais ao Git. Proteja cópias por controle de acesso e criptografia do armazenamento.
 
-   Formato:
+## Backup completo PostgreSQL
 
-   ```text
-   postgresql://postgres:SENHA@shuttle.proxy.rlwy.net:18529/railway
-   ```
+Use `pg_dump` e `pg_restore` da mesma versão principal do servidor ou de versão compatível. Configure conexão por variáveis `PGHOST`, `PGPORT`, `PGUSER`, `PGDATABASE` e autenticação segura (`PGPASSFILE` com acesso restrito ou mecanismo do provedor). Não coloque senhas em argumentos ou scripts versionados.
 
-   **Não compartilhe essa URL** (tem senha).
+Para banco externo, mantenha `PGSSLMODE=verify-full` e configure `PGSSLROOTCERT` quando o provedor exigir uma CA própria. O `pg_dump` usa libpq e não lê `backend/.env` automaticamente.
 
-### 2. Criar o arquivo `.env` no backend
+Com a conexão já configurada:
 
-1. No projeto, pasta: `rioaisgate\backend\`
-2. Crie o arquivo **`backend\.env`** (se não existir).
-3. Cole uma linha só:
-
-   ```env
-   DATABASE_URL=postgresql://postgres:SUA_SENHA@shuttle.proxy.rlwy.net:18529/railway
-   ```
-
-   Troque `SUA_SENHA` pela senha real (ou cole a `DATABASE_URL` copiada do Railway).
-
-4. Salve. Esse arquivo **não vai para o Git** (já está no `.gitignore`).
-
-### 3. Rodar o backup
-
-No PowerShell:
-
-```powershell
-cd "c:\Users\jossi\OneDrive\Anexos\Documentos\Repository TugLife\rioaisgate\backend"
-npm run backup
+```bash
+pg_dump --format=custom --no-owner --file=/caminho/seguro/rioaisgate.dump
+pg_restore --list /caminho/seguro/rioaisgate.dump
 ```
 
-Aguarde mensagens como:
+O dump completo inclui esquema, eventos, posições, embarcações, assinaturas e sequências. A listagem confirma a legibilidade do arquivo, mas a restauração de teste é necessária para verificar a recuperação.
 
-```text
-[BACKUP] Contagem: vessels=… events=… positions=…
-[BACKUP] Concluído com sucesso.
+## Ensaio de recuperação em banco novo
+
+Crie um banco vazio e isolado. Nunca aponte este procedimento ao banco de produção. Mantenha o backend e seus jobs de retenção desconectados do banco restaurado até concluir a validação.
+
+```bash
+createdb rioaisgate_recovery
+pg_restore --exit-on-error --no-owner --no-acl --dbname=rioaisgate_recovery /caminho/seguro/rioaisgate.dump
+psql --dbname=rioaisgate_recovery -c 'SELECT COUNT(*) FROM vessels; SELECT COUNT(*) FROM vessel_events; SELECT COUNT(*) FROM vessel_positions; SELECT COUNT(*) FROM telegram_subscriptions;'
 ```
 
-### 4. Onde ficam os arquivos
+Compare contagens e amostras com o momento do backup. Verifique também inserção de um evento no banco de ensaio para confirmar as sequências. Documente duração, resultado e idade do último backup recuperável. A recuperação não deve enviar alertas: deixe Telegram e AIS desligados no ensaio.
 
-Pasta criada automaticamente, por exemplo:
+Antes de um corte real, planeje a interrupção das gravações, o ponto de recuperação e a política de retenção dos dados restaurados. O job de retenção roda ao iniciar o backend e pode remover eventos antigos restaurados.
 
-```text
-rioaisgate\backups\rioaisgate-2026-05-30T14-30-00\
-  manifest.json          ← resumo (quantidades, data)
-  vessels.jsonl          ← navios
-  vessel_events.jsonl    ← entradas/saídas
-  vessel_positions.jsonl ← posições (últimas 24h no banco)
-```
+## Validação realizada nesta alteração
 
-### 5. Guardar cópia segura
-
-1. Copie a pasta `rioaisgate-2026-05-30T…` inteira para:
-   - OneDrive / Anexos, ou
-   - Disco externo.
-2. Opcional: renomeie para `backup-rioaisgate-2026-05`.
-
-Nome fixo (opcional):
-
-```powershell
-node src/db/backup.js --out=../backups/backup-2026-05
-```
-
----
-
-## Todo mês (rotina)
-
-| Quando | O que fazer |
-|--------|-------------|
-| **1× por mês** (ex.: dia 1) | Repetir passos 3–5: `npm run backup` + copiar pasta para OneDrive |
-| Automático | Backend apaga eventos com mais de **30 dias** no Postgres |
-| Opcional | Railway → Postgres → **Backups** (snapshot da plataforma) |
-
-Coloque um lembrete no calendário: *“Backup RioAISGate”*.
-
----
-
-## Reduzir `vessel_positions` no Railway (muitas páginas)
-
-É a **mesma** base Postgres, tabela `vessel_positions` (trilhas AIS). Muitas páginas no painel = muitas linhas (~10 por página).
-
-Limpeza imediata no **Postgres → Data → Query**:
-
-```sql
-SELECT COUNT(*) FROM vessel_positions;
-
--- Esvaziar trilhas (mapa ao vivo não usa esta tabela; você já tem backup em backups/)
-TRUNCATE vessel_positions;
-```
-
-No **backend Railway**, remova `AIS_SAVE_POSITIONS` ou defina `AIS_SAVE_POSITIONS=false`. Nos logs deve aparecer `positions: disabled`.
-
-## Problemas comuns
-
-| Erro | Solução |
-|------|---------|
-| `DATABASE_URL is not configured` | Falta o arquivo `backend\.env` ou a linha está errada |
-| `password authentication failed` | Senha errada — copie de novo em Railway → Variables |
-| `ETIMEDOUT` / timeout | Teste **Public Network**; firewall/VPN pode bloquear |
-| Pasta `backups` vazia | Veja se apareceu `[BACKUP] Concluído` sem erro antes |
-
----
-
-## Comandos úteis
-
-```powershell
-cd backend
-npm run backup    # exportar tudo
-npm run prune     # limpar no banco (só se quiser forçar agora)
-```
-
-Variáveis no Railway (serviço **backend**, opcional):
-
-```env
-EVENT_RETENTION_DAYS=30
-POSITION_RETENTION_HOURS=24
-```
+Em bancos locais descartáveis com PostgreSQL 17: migração, inserção de eventos e assinatura Telegram, dump completo, restauração, conferência de registros e inserção com sequência preservada. A retenção de 7 dias também foi testada: removeu o evento de 8 dias e preservou o atual. Isso não valida backups existentes de produção nem sua automação.

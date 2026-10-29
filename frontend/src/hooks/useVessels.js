@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { API_URL } from '../config';
+import { requestJson } from '../utils/request.mjs';
 import { useWebSocket } from './useWebSocket';
 
 /** Tempo que um alvo permanece visível após sumir do REST (backend usa ~30 min ativos). */
@@ -83,25 +84,13 @@ function persistVesselsToStorage(vessels, lastTouch) {
 }
 
 const initialPersisted = loadPersistedVessels();
-/** Duração mínima da splash (ms). */
-const MIN_SPLASH_MS = 15_000;
-const WS_WAIT_MS = 3500;
-const SPLASH_TICK_MS = 150;
-
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function splashProgressPct(started, cap = 99) {
-  const elapsed = Date.now() - started;
-  return Math.min(cap, Math.round((elapsed / MIN_SPLASH_MS) * cap));
-}
-
 export function useVessels(onGeofenceEvent) {
   const [vessels, setVessels] = useState(() => ({ ...initialPersisted.vessels }));
   const [events, setEvents] = useState([]);
   const [stats, setStats] = useState(null);
   const [feedStatus, setFeedStatus] = useState(null);
+  const [dataStatus, setDataStatus] = useState({ loading: true, errors: [], updatedAt: null });
+  const refreshSequence = useRef(0);
   const [bootstrap, setBootstrap] = useState({
     done: false,
     progress: 0,
@@ -109,7 +98,7 @@ export function useVessels(onGeofenceEvent) {
   });
 
   const lastTouchRef = useRef({ ...initialPersisted.lastTouch });
-  const wsConnectedRef = useRef(false);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
   const bootstrapOnceRef = useRef(false);
 
   const onGeofenceEventRef = useRef(onGeofenceEvent);
@@ -143,81 +132,33 @@ export function useVessels(onGeofenceEvent) {
     setBootstrap({ done: false, progress, label });
   }, []);
 
+  const refreshData = useCallback(async () => {
+    const sequence = ++refreshSequence.current;
+    const paths = ['/vessels', '/events?limit=50', '/stats/today', '/aisstream/status'];
+    const results = await Promise.allSettled(paths.map((path) => requestJson(`${API_URL}/api${path}`)));
+    if (sequence !== refreshSequence.current) return;
+    const errors = [];
+    const labels = ['Embarcações', 'Eventos', 'Indicadores', 'Sinal AIS'];
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') { errors.push(labels[index]); return; }
+      const value = result.value;
+      if ((index < 2 && !Array.isArray(value)) || (index >= 2 && (!value || typeof value !== 'object' || Array.isArray(value)))) {
+        errors.push(labels[index]); return;
+      }
+      if (index === 0) setVessels((prev) => mergeFromApi(prev, value));
+      if (index === 1) setEvents(value);
+      if (index === 2) setStats(value);
+      if (index === 3) setFeedStatus(value);
+    });
+    if (errors.includes('Sinal AIS')) setFeedStatus({ connected: false, api_unreachable: true });
+    setDataStatus((prev) => ({ loading: false, errors, updatedAt: errors.length ? prev.updatedAt : Date.now() }));
+  }, [mergeFromApi]);
+
   const runBootstrap = useCallback(async () => {
-    const started = Date.now();
-    const tick = (label, floor = 0) => {
-      const p = Math.max(floor, splashProgressPct(started));
-      step(p, label);
-    };
-
-    tick('Iniciando RioAISGate…', 2);
-    await delay(400);
-
-    tick('Conectando ao servidor…', 8);
-    try {
-      await fetch(`${API_URL}/api/health/live`);
-    } catch (err) {
-      console.warn('[API] health/live:', err.message);
-    }
-
-    tick('Carregando embarcações…', 18);
-    try {
-      const vRes = await fetch(`${API_URL}/api/vessels`);
-      const vs = await vRes.json();
-      setVessels((prev) => mergeFromApi(prev, vs));
-    } catch (err) {
-      console.error('[API] bootstrap vessels:', err.message);
-    }
-
-    tick('Carregando eventos e estatísticas…', 38);
-    try {
-      const [eRes, sRes] = await Promise.all([
-        fetch(`${API_URL}/api/events?limit=50`),
-        fetch(`${API_URL}/api/stats/today`),
-      ]);
-      if (eRes.ok) {
-        const es = await eRes.json();
-        if (Array.isArray(es)) setEvents(es);
-      }
-      if (sRes.ok) {
-        const ss = await sRes.json();
-        if (ss && typeof ss === 'object' && !Array.isArray(ss)) setStats(ss);
-      }
-    } catch (err) {
-      console.error('[API] bootstrap events/stats:', err.message);
-    }
-
-    tick('Verificando feed AIS…', 55);
-    try {
-      const r = await fetch(`${API_URL}/api/aisstream/status`);
-      setFeedStatus(await r.json());
-    } catch {
-      setFeedStatus({ connected: false, api_unreachable: true });
-    }
-
-    tick('Conectando tempo real…', 68);
-    const wsDeadline = Date.now() + WS_WAIT_MS;
-    while (!wsConnectedRef.current && Date.now() < wsDeadline) {
-      tick('Conectando tempo real…', 68);
-      await delay(120);
-    }
-
-    const waitLabels = [
-      'Preparando mapa…',
-      'Sincronizando geofence…',
-      'Aguardando sinal AIS…',
-    ];
-    let labelIdx = 0;
-    while (Date.now() - started < MIN_SPLASH_MS) {
-      tick(waitLabels[labelIdx % waitLabels.length], 75);
-      labelIdx += 1;
-      await delay(SPLASH_TICK_MS);
-    }
-
-    step(100, 'Abrindo painel…');
-    await delay(450);
+    step(20, 'Carregando dados…');
+    await refreshData();
     setBootstrap({ done: true, progress: 100, label: 'Pronto' });
-  }, [mergeFromApi, step]);
+  }, [refreshData, step]);
 
   const handleWsMessage = useCallback((msg) => {
     if (msg.type === 'POSITION' && msg.vessel?.mmsi != null) {
@@ -232,8 +173,7 @@ export function useVessels(onGeofenceEvent) {
         /* noop */
       }
       setEvents((prev) => [msg.event, ...prev].slice(0, 200));
-      fetch(`${API_URL}/api/stats/today`)
-        .then((r) => r.json())
+      requestJson(`${API_URL}/api/stats/today`)
         .then(setStats)
         .catch(() => {});
     }
@@ -241,7 +181,7 @@ export function useVessels(onGeofenceEvent) {
 
   useWebSocket(handleWsMessage, {
     onConnectionChange: (connected) => {
-      wsConnectedRef.current = connected;
+      setRealtimeConnected(connected);
     },
   });
 
@@ -253,34 +193,16 @@ export function useVessels(onGeofenceEvent) {
 
   useEffect(() => {
     let cancelled = false;
-    const poll = () => {
-      fetch(`${API_URL}/api/aisstream/status`)
-        .then((r) => r.json())
-        .then((data) => {
-          if (!cancelled && data && typeof data === 'object') setFeedStatus(data);
-        })
-        .catch(() => {
-          if (!cancelled) {
-            setFeedStatus({ connected: false, api_unreachable: true });
-          }
-        });
-
-      fetch(`${API_URL}/api/vessels`)
-        .then((r) => r.json())
-        .then((vs) => {
-          if (!cancelled && Array.isArray(vs)) {
-            setVessels((prev) => mergeFromApi(prev, vs));
-          }
-        })
-        .catch(() => {});
+    const poll = async () => {
+      await refreshData();
+      if (!cancelled) timer = setTimeout(poll, POLL_MS);
     };
-    poll();
-    const id = setInterval(poll, POLL_MS);
+    let timer = setTimeout(poll, POLL_MS);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearTimeout(timer);
     };
-  }, [mergeFromApi]);
+  }, [refreshData]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -289,5 +211,5 @@ export function useVessels(onGeofenceEvent) {
     return () => clearTimeout(timer);
   }, [vessels]);
 
-  return { vessels, events, stats, feedStatus, bootstrap };
+  return { vessels, events, stats, feedStatus, bootstrap, dataStatus, refreshData, realtimeConnected };
 }

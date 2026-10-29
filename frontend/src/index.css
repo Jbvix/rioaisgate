@@ -103,3 +103,72 @@ html, body, #root {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Consistent keyboard focus and readable native controls. */
+:root { color-scheme: dark; }
+body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select, summary { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
+  outline: 2px solid #38bdf8;
+  outline-offset: 3px;
+}
+button:disabled { opacity: .55; cursor: wait; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+/* Viewport, safe areas and panel sizing across phones, tablets and laptops. */
+.app-shell {
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+  min-width: 0;
+}
+.operations-panel {
+  width: min(420px, calc(100% - 16px));
+  height: 100%;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+.operations-body { overflow-y: auto; overscroll-behavior: contain; }
+.operations-summary { overflow-wrap: anywhere; }
+.operations-tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #0a1628;
+}
+.operations-tabs button { min-height: 44px; font-size: 12px; }
+.operations-content { min-height: 300px; }
+.chart-plot { min-height: 260px; position: relative; }
+.charts-panel { min-height: 400px; }
+.map-layers {
+  top: max(12px, env(safe-area-inset-top, 0px));
+  right: max(12px, env(safe-area-inset-right, 0px));
+  max-height: calc(100% - 24px);
+  overflow-y: auto;
+}
+.map-layers select { min-height: 44px; font-size: 16px; }
+.map-summary {
+  left: max(12px, env(safe-area-inset-left, 0px));
+  bottom: max(28px, calc(env(safe-area-inset-bottom, 0px) + 20px));
+  max-width: calc(100% - 24px);
+}
+.leaflet-control-attribution { max-width: calc(100vw - 12px); white-space: normal; }
+.leaflet-popup-content { max-width: calc(100vw - 80px); overflow-wrap: anywhere; }
+@media (min-width: 1024px) {
+  .operations-panel { width: 320px; }
+  .map-summary { left: auto; right: max(16px, env(safe-area-inset-right, 0px)); }
+}
+@media (min-width: 1440px) { .operations-panel { width: 384px; } }
+/* Small/landscape screens scroll the whole panel so details and tabs stay reachable. */
+@media (max-width: 1023px), (max-height: 760px) {
+  .operations-body { display: block; }
+  .operations-content { height: max(320px, 50dvh); }
+}
+@media (pointer: coarse) {
+  .leaflet-control-zoom a { width: 44px; height: 44px; line-height: 44px; }
+}
+.operations-panel button { min-height: 44px; }
+.operations-content input[type="search"] { min-width: 0; }
