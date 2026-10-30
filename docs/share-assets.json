@@ -1,0 +1,17 @@
+{
+  "asset": "/social/rioaisgate-portal-v1.jpg",
+  "width": 1731,
+  "height": 909,
+  "bytes": 191612,
+  "mime": "image/jpeg",
+  "sha256": "448c7d953464235a1954ca51fe411f8996919064d4955d09071a84067e37ffa2",
+  "provenance": "Original artwork generated with ImageGen for RioAISGate; title and website included in the approved generated artwork. Exported as JPEG without composition changes.",
+  "copy": [
+    "MONITORAMENTO MARÍTIMO",
+    "RioAISGate",
+    "Barra da Guanabara",
+    "riogateais.netlify.app"
+  ],
+  "share_url": "https://riogateais.netlify.app/?convite=portal",
+  "audio": "Original procedural Web Audio effect in frontend/src/utils/portalSound.mjs; no licensed recordings or external audio files."
+}

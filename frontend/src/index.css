@@ -172,3 +172,18 @@ button:disabled { opacity: .55; cursor: wait; }
 }
 .operations-panel button { min-height: 44px; }
 .operations-content input[type="search"] { min-width: 0; }
+
+.portal-emblem { position: relative; display: grid; place-items: center; width: 88px; height: 88px; }
+.portal-emblem::before, .portal-emblem::after {
+  content: ''; position: absolute; inset: 0; border-radius: 50%;
+  border: 1px solid rgba(56,189,248,.65);
+  box-shadow: 0 0 25px rgba(14,165,233,.25), inset 0 0 20px rgba(14,165,233,.12);
+  animation: portal-orbit 5s linear infinite;
+}
+.portal-emblem::after { inset: -8px; border-style: dashed; border-color: rgba(52,211,153,.35); animation-direction: reverse; animation-duration: 12s; }
+@keyframes portal-orbit { to { transform: rotate(360deg); } }
+@media (max-height: 650px) {
+  .splash-content { margin: auto; }
+  .splash-content .portal-emblem { width: 48px; height: 48px; margin-bottom: 12px; font-size: 26px; }
+  .splash-content > p { margin-bottom: 12px; }
+}

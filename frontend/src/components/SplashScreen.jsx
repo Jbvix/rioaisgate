@@ -2,15 +2,15 @@ import React from 'react';
 
 const TITLE = 'RIOAISGATE';
 
-export default function SplashScreen({ progress = 0, label = 'Carregando…', onOpenManual }) {
+export default function SplashScreen({ progress = 0, label = 'Carregando…', onOpenManual, onEnter, ready = false }) {
   const pct = Math.min(100, Math.max(0, Math.round(progress)));
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-hidden bg-navy-900">
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center overflow-y-auto py-6 bg-navy-900">
       <div className="splash-bg absolute inset-0 pointer-events-none" aria-hidden />
 
-      <div className="relative z-10 flex flex-col items-center px-6 max-w-lg w-full">
-        <div className="mb-2 text-4xl opacity-90" aria-hidden>
+      <div className="splash-content relative z-10 flex flex-col items-center px-6 max-w-lg w-full">
+        <div className="portal-emblem mb-6 text-4xl opacity-90" aria-hidden>
           ⚓
         </div>
 
@@ -51,6 +51,14 @@ export default function SplashScreen({ progress = 0, label = 'Carregando…', on
           </div>
         </div>
 
+        <div className="w-full flex flex-col gap-2 mt-4">
+          <button type="button" disabled={!ready} onClick={() => onEnter?.(true)} className="min-h-12 rounded-xl border border-ocean-400/60 bg-ocean-600 px-5 py-3 text-base font-semibold text-white shadow-lg shadow-ocean-600/20 hover:bg-ocean-500">
+            {ready ? 'Abrir portal com som' : 'Preparando o portal…'}
+          </button>
+          <button type="button" disabled={!ready} onClick={() => onEnter?.(false)} className="min-h-11 rounded-xl px-4 py-2 text-sm text-white/80 hover:bg-white/5">Entrar sem som</button>
+          <p className="text-center text-xs text-white/60">Efeito sonoro curto ao entrar. Você escolhe ouvir.</p>
+        </div>
+        <a href="https://wa.me/?text=Conhe%C3%A7a%20o%20RioAISGate%20%E2%80%94%20monitoramento%20mar%C3%ADtimo%20da%20Barra%20da%20Guanabara.%20https%3A%2F%2Friogateais.netlify.app%2F%3Fconvite%3Dportal" target="_blank" rel="noopener noreferrer" className="mt-3 min-h-11 flex items-center justify-center text-sm text-emerald-300 underline underline-offset-4">Compartilhar no WhatsApp</a>
         <button
           type="button"
           onClick={onOpenManual}

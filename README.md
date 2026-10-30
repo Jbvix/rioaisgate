@@ -155,3 +155,9 @@ Retenção e recuperação: consulte [backups/README.md](backups/README.md). Nã
 O painel abre como gaveta em celular/tablet (abaixo de 1024 px) e permanece ao lado do mapa em desktop. A largura se adapta à tela; telas baixas e modo paisagem usam rolagem do painel inteiro para manter detalhes e abas acessíveis. Controles do painel têm área mínima de toque de 44 px. Gráficos se ajustam ao espaço disponível e o mapa recalcula seu tamanho ao mudar de orientação ou breakpoint. As margens consideram áreas seguras do dispositivo.
 
 Validação local com dados simulados: 320×568, 360×640, 390×844, 568×320, 844×390, 768×1024, 1024×768, 1280×800, 1440×900 e 640×450; navegação entre abas, detalhes com nome longo, gráficos e menu de camadas, sem rolagem horizontal. Tiles cartográficos externos não fazem parte dessa validação.
+
+### Compartilhamento e som de abertura
+
+O HTML inicial inclui metadados Open Graph com imagem JPEG pública em `/social/rioaisgate-portal-v1.jpg`, permitindo que o WhatsApp encontre título, descrição e imagem sem executar JavaScript. Compartilhe `https://riogateais.netlify.app/?convite=portal` ou use o botão na splash. A prévia depende do deploy concluído, da disponibilidade pública da imagem e do cache do WhatsApp; gerar o link não envia mensagens automaticamente.
+
+A splash oferece **Abrir portal com som** e **Entrar sem som**. O efeito original de aproximadamente 2 segundos é sintetizado com Web Audio, sem download de áudio e somente após um clique/toque. Não há autoplay nem espera artificial para reproduzir o efeito; em dispositivos sem suporte a áudio, o app abre normalmente. O som da abertura é independente dos alertas de cruzamento da barra.

@@ -1,4 +1,5 @@
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { playPortalSound } from './utils/portalSound.mjs';
 import { readMapDeepLinkFromUrl } from './utils/mapDeepLink';
 import Map from './components/Map';
 import Dashboard from './components/Dashboard';
@@ -404,6 +405,7 @@ function MainApp({
 
 export default function App() {
   const [manualOpen, setManualOpen] = useState(false);
+  const [portalEntered, setPortalEntered] = useState(false);
   const [geofenceWatch, setGeofenceWatch] = useState(loadGeofenceWatch);
   const [barSoundEnabled, setBarSoundEnabled] = useState(loadBarSoundEnabled);
   const watchRef = useRef(geofenceWatch);
@@ -439,7 +441,7 @@ export default function App() {
   const { vessels, events, stats, feedStatus, bootstrap, dataStatus, refreshData, realtimeConnected } = useVessels(onGeofenceEvent);
 
   useEffect(() => {
-    if (!bootstrap.done || !barSoundEnabled) return;
+    if (!bootstrap.done || !portalEntered || !barSoundEnabled) return;
     const unlock = () => {
       void unlockGeofenceAudio();
     };
@@ -449,7 +451,7 @@ export default function App() {
       document.removeEventListener('click', unlock);
       document.removeEventListener('keydown', unlock);
     };
-  }, [bootstrap.done, barSoundEnabled]);
+  }, [bootstrap.done, portalEntered, barSoundEnabled]);
 
   const updateGeofenceWatch = useCallback((updater) => {
     setGeofenceWatch((prev) => {
@@ -484,9 +486,14 @@ export default function App() {
     return <UserManual onClose={() => setManualOpen(false)} />;
   }
 
-  if (!bootstrap.done) {
+  if (!bootstrap.done || !portalEntered) {
     return (
       <SplashScreen
+        ready={bootstrap.done}
+        onEnter={(withSound) => {
+          if (withSound) void playPortalSound();
+          setPortalEntered(true);
+        }}
         progress={bootstrap.progress}
         label={bootstrap.label}
         onOpenManual={() => setManualOpen(true)}
